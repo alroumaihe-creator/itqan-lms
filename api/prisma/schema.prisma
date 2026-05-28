@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  SUPERVISOR
+  TEACHER
+  ACCOUNTANT
+  PARENT
+  STUDENT
+}
+
+enum StudentStatus {
+  LEAD
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  GRADUATED
+  DROPPED
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  role      Role     @default(STUDENT)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  
+  student   Student?
+  teacher   Teacher?
+}
+
+model Student {
+  id              String        @id @default(uuid())
+  userId          String        @unique
+  nameAr          String
+  nameEn          String?
+  status          StudentStatus @default(LEAD)
+  nationality     String?
+  timezone        String        @default("Asia/Riyadh")
+  createdAt       DateTime      @default(now())
+  
+  user            User          @relation(fields: [userId], references: [id])
+}
+
+model Teacher {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  nameAr          String
+  nameEn          String?
+  specializations String[]
+  isAvailable     Boolean  @default(true)
+  hourlyRate      Float?
+  createdAt       DateTime @default(now())
+
+  user            User     @relation(fields: [userId], references: [id])
+}
+
+model Course {
+  id            String   @id @default(uuid())
+  nameAr        String
+  nameEn        String?
+  type          String
+  level         Int      @default(1)
+  price         Float?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+}
