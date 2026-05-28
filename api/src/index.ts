@@ -2,25 +2,18 @@ import express from "express";
 import cors from "cors";
 import { PrismaClient } from "@prisma/client";
 
-// تهيئة الاتصال بقاعدة البيانات
 const prisma = new PrismaClient();
-
-// تهيئة تطبيق Express
 const app = express();
 
-// السماح بالاتصال من الواجهة الأمامية
 app.use(cors({ origin: true }));
 app.use(express.json());
 
-// 1. مسار اختباري للتأكد من عمل الخادم
+// مسار الفحص
 app.get("/health", (req, res) => {
-  res.status(200).json({ 
-    status: "success", 
-    message: "Itqan Academy API is running perfectly on Vercel!" 
-  });
+  res.status(200).json({ status: "success", message: "API is running!" });
 });
 
-// 2. مسار لجلب قائمة الطلاب
+// مسار جلب الطلاب
 app.get("/students", async (req, res) => {
   try {
     const students = await prisma.student.findMany({
@@ -28,18 +21,38 @@ app.get("/students", async (req, res) => {
     });
     res.status(200).json(students);
   } catch (error) {
-    console.error("Error fetching students:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ error: "Failed to fetch students" });
   }
 });
 
-// تحديد المنفذ للعمل محلياً على جهازك
+// مسار إضافة طالب جديد
+app.post("/students", async (req, res) => {
+  try {
+    const { nameAr, nameEn, email, nationality, status } = req.body;
+    const newStudent = await prisma.student.create({
+      data: {
+        nameAr,
+        nameEn,
+        status: status || 'LEAD',
+        nationality,
+        user: {
+          create: {
+            email: email || `user-${Date.now()}@academy.com`,
+            role: 'STUDENT',
+            isActive: true
+          }
+        }
+      },
+      include: { user: true }
+    });
+    res.status(201).json(newStudent);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create student" });
+  }
+});
+
 if (process.env.NODE_ENV !== "production") {
-  const PORT = process.env.PORT || 8080;
-  app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-  });
+  app.listen(8080, () => console.log("Server running on port 8080"));
 }
 
-// تصدير التطبيق ليعمل سحابياً على Vercel
 export default app;

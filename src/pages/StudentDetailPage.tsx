@@ -1,8 +1,8 @@
 // ============================================================
-// STUDENT DETAIL PAGE - Full Profile with Tabs
+// STUDENT DETAIL PAGE - Full Profile with Tabs (Connected to API)
 // ============================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowRight, Edit, MoreVertical, BookMarked, GraduationCap,
   Calendar, CreditCard, FileText, MessageSquare, Phone, Mail,
@@ -15,10 +15,10 @@ import {
   ResponsiveContainer, LineChart, Line
 } from 'recharts';
 import {
-  mockStudents, mockQuranRecords, mockInvoices, mockSessions,
+  mockQuranRecords, mockInvoices, mockSessions,
   mockEnrollments, mockCertificates, mockTajweedErrors,
   mockQuranProgressData
-} from '../data/mockData';
+} from '../data/mockData'; // تمت إزالة mockStudents لأننا سنجلب الطالب من السيرفر
 import { StatusBadge } from '../components/shared/StatusBadge';
 import { Avatar } from '../components/shared/Avatar';
 import {
@@ -62,7 +62,58 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
   onBack,
 }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const student = mockStudents.find((s) => s.id === studentId) || mockStudents[0];
+  
+  // 1. إضافة حالات التحميل والبيانات الحقيقية
+  const [student, setStudent] = useState<Student | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // 2. جلب بيانات الطالب من السيرفر
+  useEffect(() => {
+    const fetchStudentDetails = async () => {
+      try {
+        setIsLoading(true);
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+        
+        // جلب جميع الطلاب والبحث عن الطالب المطلوب 
+        // (في المستقبل سنصنع مسار مخصص لجلب طالب واحد لتسريع العملية)
+        const response = await fetch(`${apiUrl}/students`);
+        if (!response.ok) throw new Error('فشل الاتصال بالسيرفر');
+        
+        const data = await response.json();
+        const foundStudent = data.find((s: Student) => s.id === studentId);
+        setStudent(foundStudent || null);
+      } catch (error) {
+        console.error("خطأ في جلب تفاصيل الطالب:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchStudentDetails();
+  }, [studentId]);
+
+  // 3. شاشة التحميل
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <div className="w-12 h-12 border-4 border-[#1B4F72] border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-gray-500 font-medium">جاري جلب ملف الطالب...</p>
+      </div>
+    );
+  }
+
+  // 4. في حالة عدم العثور على الطالب
+  if (!student) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <AlertCircle size={48} className="text-red-400" />
+        <p className="text-gray-800 font-bold text-lg">لم يتم العثور على بيانات الطالب</p>
+        <button onClick={onBack} className="btn btn-primary">العودة لقائمة الطلاب</button>
+      </div>
+    );
+  }
+
+  // فلترة البيانات الوهمية بناءً على الـ ID الحقيقي (ستكون فارغة بشكل صحيح للطالب الجديد)
   const studentRecords = mockQuranRecords.filter((r) => r.studentId === student.id);
   const studentInvoices = mockInvoices.filter((i) => i.studentId === student.id);
   const studentEnrollments = mockEnrollments.filter((e) => e.studentId === student.id);
@@ -133,7 +184,7 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <Mail size={15} className="text-gray-400 flex-shrink-0" />
-                <span className="truncate">{student.user.email}</span>
+                <span className="truncate">{student.user?.email || 'لا يوجد بريد'}</span>
               </div>
               {student.nationality && (
                 <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -204,7 +255,7 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
           <div className="card p-5">
             <h3 className="font-bold text-gray-800 mb-4">الدورات المسجل بها</h3>
             {studentEnrollments.length === 0 ? (
-              <p className="text-gray-400 text-sm text-center py-8">لا توجد دورات</p>
+              <p className="text-gray-400 text-sm text-center py-8">لا توجد دورات مسجلة حالياً</p>
             ) : (
               <div className="space-y-3">
                 {studentEnrollments.map((enrollment) => (
@@ -379,7 +430,7 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
           <div className="card p-5">
             <h3 className="font-bold text-gray-800 mb-4">سجل الجلسات القرآنية</h3>
             {studentRecords.length === 0 ? (
-              <p className="text-gray-400 text-center py-8">لا توجد سجلات بعد</p>
+              <p className="text-gray-400 text-center py-8">لا توجد سجلات قرآنية محفوظة لهذا الطالب حتى الآن</p>
             ) : (
               <div className="timeline">
                 {studentRecords.map((record) => (
@@ -457,15 +508,15 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
           <div className="grid grid-cols-3 gap-4">
             <div className="stat-card" style={{ borderRightColor: '#27AE60' }}>
               <p className="text-xs text-gray-400">حاضر</p>
-              <p className="text-3xl font-black text-green-600">43</p>
+              <p className="text-3xl font-black text-green-600">0</p>
             </div>
             <div className="stat-card" style={{ borderRightColor: '#E74C3C' }}>
               <p className="text-xs text-gray-400">غائب</p>
-              <p className="text-3xl font-black text-red-500">4</p>
+              <p className="text-3xl font-black text-red-500">0</p>
             </div>
             <div className="stat-card" style={{ borderRightColor: '#F39C12' }}>
               <p className="text-xs text-gray-400">نسبة الحضور</p>
-              <p className="text-3xl font-black text-amber-500">91%</p>
+              <p className="text-3xl font-black text-amber-500">0%</p>
             </div>
           </div>
 
@@ -515,27 +566,31 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
             <div className="p-4 border-b border-gray-100">
               <h3 className="font-bold text-gray-800">الفواتير</h3>
             </div>
-            <div className="divide-y divide-gray-50">
-              {studentInvoices.map((invoice) => (
-                <div key={invoice.id} className="flex items-center gap-3 p-4">
-                  <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center">
-                    <FileText size={18} className="text-gray-400" />
+            {studentInvoices.length === 0 ? (
+               <p className="text-gray-400 text-sm text-center py-8">لا توجد فواتير مالية مسجلة</p>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {studentInvoices.map((invoice) => (
+                  <div key={invoice.id} className="flex items-center gap-3 p-4">
+                    <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center">
+                      <FileText size={18} className="text-gray-400" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-800 text-sm">{invoice.invoiceNumber}</p>
+                      <p className="text-xs text-gray-400">
+                        {invoice.dueDate
+                          ? `يستحق: ${new Date(invoice.dueDate).toLocaleDateString('ar-SA')}`
+                          : '—'}
+                      </p>
+                    </div>
+                    <div className="text-left">
+                      <p className="font-bold text-gray-800">{formatCurrency(invoice.total, invoice.currency)}</p>
+                    </div>
+                    <StatusBadge status={invoice.status} size="sm" />
                   </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-800 text-sm">{invoice.invoiceNumber}</p>
-                    <p className="text-xs text-gray-400">
-                      {invoice.dueDate
-                        ? `يستحق: ${new Date(invoice.dueDate).toLocaleDateString('ar-SA')}`
-                        : '—'}
-                    </p>
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold text-gray-800">{formatCurrency(invoice.total, invoice.currency)}</p>
-                  </div>
-                  <StatusBadge status={invoice.status} size="sm" />
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -600,40 +655,44 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
         <div className="space-y-5 animate-fadeIn">
           <div className="card p-5">
             <h3 className="font-bold text-gray-800 mb-4">الدورات والتقدم</h3>
-            <div className="space-y-4">
-              {studentEnrollments.map((enrollment) => (
-                <div key={enrollment.id} className="border border-gray-100 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div>
-                      <p className="font-bold text-gray-800">{enrollment.course?.nameAr}</p>
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        مسجل منذ {new Date(enrollment.enrolledAt).toLocaleDateString('ar-SA')}
-                      </p>
+            {studentEnrollments.length === 0 ? (
+               <p className="text-gray-400 text-sm text-center py-8">لا توجد دورات مسجلة حالياً</p>
+            ) : (
+              <div className="space-y-4">
+                {studentEnrollments.map((enrollment) => (
+                  <div key={enrollment.id} className="border border-gray-100 rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <p className="font-bold text-gray-800">{enrollment.course?.nameAr}</p>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          مسجل منذ {new Date(enrollment.enrolledAt).toLocaleDateString('ar-SA')}
+                        </p>
+                      </div>
+                      <span className={`text-2xl font-black ${
+                        enrollment.progress >= 75 ? 'text-green-600' :
+                        enrollment.progress >= 50 ? 'text-[#1B4F72]' : 'text-amber-500'
+                      }`}>
+                        {enrollment.progress}%
+                      </span>
                     </div>
-                    <span className={`text-2xl font-black ${
-                      enrollment.progress >= 75 ? 'text-green-600' :
-                      enrollment.progress >= 50 ? 'text-[#1B4F72]' : 'text-amber-500'
-                    }`}>
-                      {enrollment.progress}%
-                    </span>
+                    <div className="progress-bar h-3 rounded-full">
+                      <div
+                        className="progress-fill rounded-full"
+                        style={{
+                          width: `${enrollment.progress}%`,
+                          background: `linear-gradient(to left, #F39C12, #1B4F72)`,
+                        }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-400 mt-1.5">
+                      <span>0%</span>
+                      <span>مكتمل: {enrollment.progress}%</span>
+                      <span>100%</span>
+                    </div>
                   </div>
-                  <div className="progress-bar h-3 rounded-full">
-                    <div
-                      className="progress-fill rounded-full"
-                      style={{
-                        width: `${enrollment.progress}%`,
-                        background: `linear-gradient(to left, #F39C12, #1B4F72)`,
-                      }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-400 mt-1.5">
-                    <span>0%</span>
-                    <span>مكتمل: {enrollment.progress}%</span>
-                    <span>100%</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="card p-5">
