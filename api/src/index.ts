@@ -8,7 +8,7 @@ const prisma = new PrismaClient();
 // تهيئة تطبيق Express
 const app = express();
 
-// السماح بالاتصال من الواجهة الأمامية (Frontend)
+// السماح بالاتصال من الواجهة الأمامية
 app.use(cors({ origin: true }));
 app.use(express.json());
 
@@ -16,7 +16,7 @@ app.use(express.json());
 app.get("/health", (req, res) => {
   res.status(200).json({ 
     status: "success", 
-    message: "Itqan Academy API is running perfectly on Render!" 
+    message: "Itqan Academy API is running perfectly on Vercel!" 
   });
 });
 
@@ -33,8 +33,13 @@ app.get("/students", async (req, res) => {
   }
 });
 
-// تحديد المنفذ (Port) وتمريره للسيرفر
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});
+// تحديد المنفذ للعمل محلياً على جهازك
+if (process.env.NODE_ENV !== "production") {
+  const PORT = process.env.PORT || 8080;
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+  });
+}
+
+// تصدير التطبيق ليعمل سحابياً على Vercel
+export default app;
