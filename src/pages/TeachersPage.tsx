@@ -4,7 +4,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  Search, Plus, Star, CheckCircle, Eye, Edit, Trash2, BookOpen, DollarSign, Percent
+  Search, Plus, Star, CheckCircle, Eye, Edit, Trash2, BookOpen, DollarSign, Percent, Mail, Phone, Clock
 } from 'lucide-react';
 import { Avatar } from '../components/shared/Avatar';
 import type { Teacher } from '../types';
@@ -14,7 +14,11 @@ export const TeachersPage: React.FC<{ onNavigate: (page: string) => void }> = ()
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [availFilter, setAvailFilter] = useState<'ALL' | 'AVAILABLE' | 'BUSY'>('ALL');
+  
+  // حالات النوافذ (Modals)
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingTeacher, setEditingTeacher] = useState<any>(null);
+  const [viewingTeacher, setViewingTeacher] = useState<any>(null);
 
   useEffect(() => {
     const fetchTeachers = async () => {
@@ -34,11 +38,15 @@ export const TeachersPage: React.FC<{ onNavigate: (page: string) => void }> = ()
     fetchTeachers();
   }, []);
 
-  const handleAddTeacher = async (formData: any) => {
+  const handleSaveTeacher = async (formData: any) => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
-      const response = await fetch(`${apiUrl}/teachers`, {
-        method: 'POST',
+      const isEditing = !!formData.id;
+      const url = isEditing ? `${apiUrl}/teachers/${formData.id}` : `${apiUrl}/teachers`;
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nameAr: formData.nameAr,
@@ -48,14 +56,20 @@ export const TeachersPage: React.FC<{ onNavigate: (page: string) => void }> = ()
           paymentMethod: formData.paymentMethod,
           hourlyRate: formData.hourlyRate ? parseFloat(formData.hourlyRate) : null,
           percentageRate: formData.percentageRate ? parseFloat(formData.percentageRate) : null,
-          status: 'ACTIVE'
+          status: formData.status || 'ACTIVE'
         }),
       });
 
       if (!response.ok) throw new Error('فشل حفظ المعلم');
-      const newTeacher = await response.json();
-      setTeachers((prev) => [newTeacher, ...prev]);
-      setShowAddModal(false);
+      const savedTeacher = await response.json();
+
+      if (isEditing) {
+        setTeachers((prev) => prev.map((t) => t.id === savedTeacher.id ? savedTeacher : t));
+        setEditingTeacher(null);
+      } else {
+        setTeachers((prev) => [savedTeacher, ...prev]);
+        setShowAddModal(false);
+      }
     } catch (error) {
       console.error("خطأ أثناء الحفظ:", error);
       alert("حدث خطأ أثناء حفظ المعلم.");
@@ -64,15 +78,10 @@ export const TeachersPage: React.FC<{ onNavigate: (page: string) => void }> = ()
 
   const handleDeleteTeacher = async (id: string) => {
     if (!window.confirm('هل أنت متأكد من حذف هذا المعلم نهائياً؟')) return;
-    
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
-      const response = await fetch(`${apiUrl}/teachers/${id}`, {
-        method: 'DELETE',
-      });
-
+      const response = await fetch(`${apiUrl}/teachers/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error('فشل الحذف');
-      
       setTeachers((prev) => prev.filter(t => t.id !== id));
     } catch (error) {
       console.error("خطأ أثناء الحذف:", error);
@@ -86,10 +95,8 @@ export const TeachersPage: React.FC<{ onNavigate: (page: string) => void }> = ()
       const q = search.toLowerCase();
       result = result.filter(
         (t) =>
-          t.nameAr?.includes(q) ||
-          t.nameEn?.toLowerCase().includes(q) ||
-          t.specialization?.toLowerCase().includes(q) ||
-          t.user?.email?.toLowerCase().includes(q)
+          t.nameAr?.includes(q) || t.nameEn?.toLowerCase().includes(q) ||
+          t.specialization?.toLowerCase().includes(q) || t.user?.email?.toLowerCase().includes(q)
       );
     }
     return result;
@@ -132,7 +139,13 @@ export const TeachersPage: React.FC<{ onNavigate: (page: string) => void }> = ()
 
       <div className="grid-cards">
         {filtered.map((teacher) => (
-          <TeacherCard key={teacher.id} teacher={teacher} onDelete={() => handleDeleteTeacher(teacher.id)} />
+          <TeacherCard 
+            key={teacher.id} 
+            teacher={teacher} 
+            onView={() => setViewingTeacher(teacher)}
+            onEdit={() => setEditingTeacher(teacher)}
+            onDelete={() => handleDeleteTeacher(teacher.id)} 
+          />
         ))}
         {filtered.length === 0 && (
           <div className="col-span-full flex flex-col items-center justify-center py-16 text-gray-400">
@@ -143,13 +156,24 @@ export const TeachersPage: React.FC<{ onNavigate: (page: string) => void }> = ()
       </div>
 
       {showAddModal && (
-        <TeacherFormModal onClose={() => setShowAddModal(false)} onSave={handleAddTeacher} />
+        <TeacherFormModal onClose={() => setShowAddModal(false)} onSave={handleSaveTeacher} />
+      )}
+      
+      {editingTeacher && (
+        <TeacherFormModal teacher={editingTeacher} onClose={() => setEditingTeacher(null)} onSave={handleSaveTeacher} />
+      )}
+
+      {viewingTeacher && (
+        <TeacherViewModal teacher={viewingTeacher} onClose={() => setViewingTeacher(null)} />
       )}
     </div>
   );
 };
 
-const TeacherCard: React.FC<{ teacher: any, onDelete: () => void }> = ({ teacher, onDelete }) => (
+// ==========================================
+// مكون البطاقة (Teacher Card)
+// ==========================================
+const TeacherCard: React.FC<{ teacher: any, onView: () => void, onEdit: () => void, onDelete: () => void }> = ({ teacher, onView, onEdit, onDelete }) => (
   <div className="card p-5 card-interactive">
     <div className="flex items-start gap-4 mb-4">
       <Avatar name={teacher.nameAr} size="lg" />
@@ -176,7 +200,6 @@ const TeacherCard: React.FC<{ teacher: any, onDelete: () => void }> = ({ teacher
       )}
     </div>
 
-    {/* عرض نوع التعاقد المالي */}
     <div className="bg-gray-50 rounded-lg p-2 flex items-center justify-center gap-2 mb-4 border border-gray-100">
       {teacher.paymentMethod === 'PERCENTAGE' ? (
         <>
@@ -210,10 +233,10 @@ const TeacherCard: React.FC<{ teacher: any, onDelete: () => void }> = ({ teacher
     </div>
 
     <div className="flex gap-2">
-      <button className="btn btn-primary btn-sm flex-1 gap-1">
+      <button onClick={onView} className="btn btn-primary btn-sm flex-1 gap-1">
         <Eye size={14} /> عرض
       </button>
-      <button className="btn btn-ghost btn-icon btn-sm tooltip" data-tip="تعديل">
+      <button onClick={onEdit} className="btn btn-ghost btn-icon btn-sm tooltip" data-tip="تعديل">
         <Edit size={14} />
       </button>
       <button onClick={onDelete} className="btn btn-ghost btn-icon btn-sm text-red-400 tooltip" data-tip="حذف">
@@ -223,12 +246,21 @@ const TeacherCard: React.FC<{ teacher: any, onDelete: () => void }> = ({ teacher
   </div>
 );
 
-const TeacherFormModal: React.FC<{ onClose: () => void, onSave: (data: any) => void }> = ({ onClose, onSave }) => {
+// ==========================================
+// نافذة الإضافة والتعديل (Form Modal)
+// ==========================================
+const TeacherFormModal: React.FC<{ teacher?: any, onClose: () => void, onSave: (data: any) => void }> = ({ teacher, onClose, onSave }) => {
   const [formData, setFormData] = useState({
-    nameAr: '', nameEn: '', email: '', phone: '',
-    specializations: '', bio: '', timezone: 'Asia/Riyadh',
-    paymentMethod: 'HOURLY', // الافتراضي هو الأجر بالساعة
-    hourlyRate: '', percentageRate: ''
+    id: teacher?.id || '',
+    nameAr: teacher?.nameAr || '', 
+    nameEn: teacher?.nameEn || '', 
+    email: teacher?.user?.email || '', 
+    specializations: teacher?.specialization || '', 
+    timezone: 'Asia/Riyadh',
+    paymentMethod: teacher?.paymentMethod || 'HOURLY',
+    hourlyRate: teacher?.hourlyRate?.toString() || '', 
+    percentageRate: teacher?.percentageRate?.toString() || '',
+    status: teacher?.status || 'ACTIVE'
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -240,7 +272,7 @@ const TeacherFormModal: React.FC<{ onClose: () => void, onSave: (data: any) => v
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal animate-slideUp" style={{ maxWidth: 600 }}>
         <div className="modal-header">
-          <h2 className="text-lg font-bold">إضافة معلم جديد</h2>
+          <h2 className="text-lg font-bold">{teacher ? 'تعديل بيانات المعلم' : 'إضافة معلم جديد'}</h2>
           <button onClick={onClose} className="btn btn-icon btn-ghost">✕</button>
         </div>
         <form onSubmit={handleSubmit}>
@@ -264,7 +296,6 @@ const TeacherFormModal: React.FC<{ onClose: () => void, onSave: (data: any) => v
                 value={formData.specializations} onChange={e => setFormData({...formData, specializations: e.target.value})} />
             </div>
 
-            {/* قسم النظام المالي الجديد */}
             <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-4">
               <div className="form-group">
                 <label className="form-label font-bold text-[#1B4F72]">نظام المحاسبة المالية *</label>
@@ -302,12 +333,11 @@ const TeacherFormModal: React.FC<{ onClose: () => void, onSave: (data: any) => v
                 )}
                 
                 <div className="form-group">
-                  <label className="form-label">المنطقة الزمنية</label>
+                  <label className="form-label">حالة الحساب</label>
                   <select className="form-input form-select" 
-                    value={formData.timezone} onChange={e => setFormData({...formData, timezone: e.target.value})}>
-                    <option value="Asia/Riyadh">Asia/Riyadh</option>
-                    <option value="Africa/Cairo">Africa/Cairo</option>
-                    <option value="Asia/Dubai">Asia/Dubai</option>
+                    value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
+                    <option value="ACTIVE">نشط</option>
+                    <option value="SUSPENDED">موقوف</option>
                   </select>
                 </div>
               </div>
@@ -316,10 +346,72 @@ const TeacherFormModal: React.FC<{ onClose: () => void, onSave: (data: any) => v
           </div>
           <div className="modal-footer">
             <button type="button" onClick={onClose} className="btn btn-ghost">إلغاء</button>
-            <button type="submit" className="btn btn-primary">حفظ المعلم</button>
+            <button type="submit" className="btn btn-primary">حفظ التعديلات</button>
           </div>
         </form>
       </div>
     </div>
   );
 };
+
+// ==========================================
+// نافذة عرض البيانات (View Modal)
+// ==========================================
+const TeacherViewModal: React.FC<{ teacher: any, onClose: () => void }> = ({ teacher, onClose }) => (
+  <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="modal animate-slideUp" style={{ maxWidth: 500 }}>
+      <div className="modal-header">
+        <h2 className="text-lg font-bold">الملف التعريفي للمعلم</h2>
+        <button onClick={onClose} className="btn btn-icon btn-ghost">✕</button>
+      </div>
+      <div className="modal-body space-y-6">
+        
+        <div className="flex flex-col items-center text-center">
+          <Avatar name={teacher.nameAr} size="xl" />
+          <h3 className="text-xl font-bold text-gray-800 mt-3">{teacher.nameAr}</h3>
+          <p className="text-sm text-gray-500">{teacher.specialization || 'لم يحدد تخصص'}</p>
+          <div className="mt-2">
+             <span className={`px-3 py-1 rounded-full text-xs font-bold ${teacher.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+               {teacher.status === 'ACTIVE' ? 'حساب نشط' : 'موقوف'}
+             </span>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+             <Mail className="text-gray-400" size={18} />
+             <div>
+               <p className="text-xs text-gray-400">البريد الإلكتروني</p>
+               <p className="font-semibold text-gray-800 text-sm" dir="ltr">{teacher.user?.email}</p>
+             </div>
+          </div>
+          
+          <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-100">
+             <Clock className="text-gray-400" size={18} />
+             <div>
+               <p className="text-xs text-gray-400">تاريخ الانضمام</p>
+               <p className="font-semibold text-gray-800 text-sm">
+                 {new Date(teacher.createdAt).toLocaleDateString('ar-EG')}
+               </p>
+             </div>
+          </div>
+
+          <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
+             {teacher.paymentMethod === 'PERCENTAGE' ? (
+               <Percent className="text-[#1B4F72]" size={18} />
+             ) : (
+               <DollarSign className="text-[#1B4F72]" size={18} />
+             )}
+             <div>
+               <p className="text-xs text-blue-600">النظام المالي</p>
+               <p className="font-bold text-[#1B4F72] text-sm">
+                 {teacher.paymentMethod === 'PERCENTAGE' ? `نسبة من الدخل (${teacher.percentageRate}%)` : `أجر بالساعة (${teacher.hourlyRate}$)`}
+               </p>
+             </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+);

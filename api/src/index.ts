@@ -20,9 +20,7 @@ app.get("/health", (req, res) => {
 // ==========================================
 app.get("/students", async (req, res) => {
   try {
-    const students = await prisma.student.findMany({
-      include: { user: true }
-    });
+    const students = await prisma.student.findMany({ include: { user: true } });
     res.status(200).json(students);
   } catch (error) {
     console.error("GET_STUDENTS_ERROR:", error);
@@ -35,17 +33,8 @@ app.post("/students", async (req, res) => {
     const { nameAr, nameEn, email, nationality, status } = req.body;
     const newStudent = await prisma.student.create({
       data: {
-        nameAr,
-        nameEn,
-        status: status || 'LEAD',
-        nationality,
-        user: {
-          create: {
-            email: email || `user-${Date.now()}@academy.com`,
-            role: 'STUDENT',
-            isActive: true
-          }
-        }
+        nameAr, nameEn, status: status || 'LEAD', nationality,
+        user: { create: { email: email || `user-${Date.now()}@academy.com`, role: 'STUDENT', isActive: true } }
       },
       include: { user: true }
     });
@@ -61,9 +50,7 @@ app.post("/students", async (req, res) => {
 // ==========================================
 app.get("/teachers", async (req, res) => {
   try {
-    const teachers = await prisma.teacher.findMany({
-      include: { user: true }
-    });
+    const teachers = await prisma.teacher.findMany({ include: { user: true } });
     res.status(200).json(teachers);
   } catch (error) {
     console.error("GET_TEACHERS_ERROR:", error);
@@ -74,23 +61,13 @@ app.get("/teachers", async (req, res) => {
 app.post("/teachers", async (req, res) => {
   try {
     const { nameAr, nameEn, email, specialization, paymentMethod, hourlyRate, percentageRate, status } = req.body;
-    
     const newTeacher = await prisma.teacher.create({
       data: {
-        nameAr,
-        nameEn,
-        specialization,
-        status: status || 'ACTIVE',
+        nameAr, nameEn, specialization, status: status || 'ACTIVE',
         paymentMethod: paymentMethod || 'HOURLY',
         hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null,
         percentageRate: percentageRate ? parseFloat(percentageRate) : null,
-        user: {
-          create: {
-            email: email || `teacher-${Date.now()}@academy.com`,
-            role: 'TEACHER',
-            isActive: true
-          }
-        }
+        user: { create: { email: email || `teacher-${Date.now()}@academy.com`, role: 'TEACHER', isActive: true } }
       },
       include: { user: true }
     });
@@ -101,13 +78,34 @@ app.post("/teachers", async (req, res) => {
   }
 });
 
+// مسار تعديل بيانات معلم
+app.put("/teachers/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nameAr, nameEn, email, specialization, paymentMethod, hourlyRate, percentageRate, status } = req.body;
+
+    const updatedTeacher = await prisma.teacher.update({
+      where: { id: id },
+      data: {
+        nameAr, nameEn, specialization, status, paymentMethod,
+        hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null,
+        percentageRate: percentageRate ? parseFloat(percentageRate) : null,
+        user: { update: { email: email } } // تحديث الإيميل في جدول المستخدمين المرتبط
+      },
+      include: { user: true }
+    });
+    res.status(200).json(updatedTeacher);
+  } catch (error) {
+    console.error("PUT_TEACHER_ERROR:", error);
+    res.status(500).json({ error: "Failed to update teacher" });
+  }
+});
+
 // مسار حذف معلم
 app.delete("/teachers/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    await prisma.teacher.delete({
-      where: { id: id }
-    });
+    await prisma.teacher.delete({ where: { id: id } });
     res.status(200).json({ message: "Teacher deleted successfully" });
   } catch (error) {
     console.error("DELETE_TEACHER_ERROR:", error);
