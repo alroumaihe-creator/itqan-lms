@@ -7,7 +7,7 @@ import {
   ArrowRight, Edit, MoreVertical, BookMarked, GraduationCap,
   Calendar, CreditCard, FileText, MessageSquare, Phone, Mail,
   MapPin, Clock, Star, TrendingUp, CheckCircle, XCircle,
-  AlertCircle, Award, Download
+  AlertCircle, Award, Download, Trash2
 } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -18,7 +18,7 @@ import {
   mockQuranRecords, mockInvoices, mockSessions,
   mockEnrollments, mockCertificates, mockTajweedErrors,
   mockQuranProgressData
-} from '../data/mockData'; // تمت إزالة mockStudents لأننا سنجلب الطالب من السيرفر
+} from '../data/mockData';
 import { StatusBadge } from '../components/shared/StatusBadge';
 import { Avatar } from '../components/shared/Avatar';
 import {
@@ -26,6 +26,7 @@ import {
   TRACK_TYPE_LABELS, INVOICE_STATUS_LABELS, formatRelativeTime
 } from '../utils/formatters';
 import type { Student } from '../types';
+import { StudentFormModal } from '../components/students/StudentFormModal'; // تم إضافة استيراد النافذة
 
 const TABS = [
   { id: 'overview', label: 'نظرة عامة', icon: GraduationCap },
@@ -63,19 +64,16 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState('overview');
   
-  // 1. إضافة حالات التحميل والبيانات الحقيقية
   const [student, setStudent] = useState<Student | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [showEditModal, setShowEditModal] = useState(false); // حالة نافذة التعديل
 
-  // 2. جلب بيانات الطالب من السيرفر
+  // جلب بيانات الطالب
   useEffect(() => {
     const fetchStudentDetails = async () => {
       try {
         setIsLoading(true);
         const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
-        
-        // جلب جميع الطلاب والبحث عن الطالب المطلوب 
-        // (في المستقبل سنصنع مسار مخصص لجلب طالب واحد لتسريع العملية)
         const response = await fetch(`${apiUrl}/students`);
         if (!response.ok) throw new Error('فشل الاتصال بالسيرفر');
         
@@ -92,7 +90,49 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
     fetchStudentDetails();
   }, [studentId]);
 
-  // 3. شاشة التحميل
+  // دالة الحذف
+  const handleDeleteStudent = async () => {
+    if (!window.confirm('هل أنت متأكد من حذف هذا الطالب نهائياً؟')) return;
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const response = await fetch(`${apiUrl}/students/${studentId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('فشل الحذف');
+      onBack(); // العودة لقائمة الطلاب
+    } catch (error) {
+      console.error("خطأ أثناء الحذف:", error);
+      alert("حدث خطأ أثناء حذف الطالب.");
+    }
+  };
+
+  // دالة حفظ التعديلات
+  const handleUpdateStudent = async (formData: any) => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const response = await fetch(`${apiUrl}/students/${studentId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          nameAr: formData.nameAr,
+          nameEn: formData.nameEn,
+          email: formData.user?.email,
+          nationality: formData.nationality,
+          status: formData.status
+        }),
+      });
+      
+      if (!response.ok) throw new Error('فشل التعديل');
+      const updatedStudent = await response.json();
+      
+      setStudent(updatedStudent); // تحديث الواجهة فوراً
+      setShowEditModal(false);
+    } catch (error) {
+      console.error("خطأ أثناء التعديل:", error);
+      alert("حدث خطأ أثناء تحديث البيانات.");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
@@ -102,7 +142,6 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
     );
   }
 
-  // 4. في حالة عدم العثور على الطالب
   if (!student) {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
@@ -113,20 +152,14 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
     );
   }
 
-  // فلترة البيانات الوهمية بناءً على الـ ID الحقيقي (ستكون فارغة بشكل صحيح للطالب الجديد)
   const studentRecords = mockQuranRecords.filter((r) => r.studentId === student.id);
   const studentInvoices = mockInvoices.filter((i) => i.studentId === student.id);
   const studentEnrollments = mockEnrollments.filter((e) => e.studentId === student.id);
   const studentCerts = mockCertificates.filter((c) => c.studentId === student.id);
 
-  const totalPagesMemorized = studentRecords.reduce(
-    (sum, r) => sum + (r.pagesCount || 0), 0
-  );
-  const avgScore = studentRecords.length > 0
-    ? studentRecords.reduce((s, r) => s + (r.recitationScore || 0), 0) / studentRecords.length
-    : 0;
+  const totalPagesMemorized = studentRecords.reduce((sum, r) => sum + (r.pagesCount || 0), 0);
+  const avgScore = studentRecords.length > 0 ? studentRecords.reduce((s, r) => s + (r.recitationScore || 0), 0) / studentRecords.length : 0;
 
-  // Attendance mock data
   const attendanceData = [
     { month: 'مارس', present: 10, absent: 1 },
     { month: 'أبريل', present: 11, absent: 2 },
@@ -135,9 +168,7 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
   ];
 
   const tajweedRadarData = mockTajweedErrors.map((e) => ({
-    subject: e.error,
-    count: e.count,
-    fullMark: 20,
+    subject: e.error, count: e.count, fullMark: 20,
   }));
 
   return (
@@ -156,7 +187,7 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
         <div className="flex flex-col md:flex-row gap-5">
           <div className="relative">
             <Avatar name={student.nameAr} size="xl" imageUrl={student.profileImageUrl} />
-            <button className="absolute -bottom-1 -left-1 w-7 h-7 bg-[#1B4F72] rounded-full flex items-center justify-center text-white shadow-lg">
+            <button onClick={() => setShowEditModal(true)} className="absolute -bottom-1 -left-1 w-7 h-7 bg-[#1B4F72] rounded-full flex items-center justify-center text-white shadow-lg">
               <Edit size={12} />
             </button>
           </div>
@@ -164,18 +195,16 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
             <div className="flex items-start justify-between">
               <div>
                 <h1 className="text-2xl font-black text-gray-800 mb-1">{student.nameAr}</h1>
-                {student.nameEn && (
-                  <p className="text-gray-400 text-sm mb-2">{student.nameEn}</p>
-                )}
+                {student.nameEn && <p className="text-gray-400 text-sm mb-2">{student.nameEn}</p>}
                 <StatusBadge status={student.status} />
               </div>
               <div className="flex gap-2">
-                <button className="btn btn-ghost btn-sm gap-1">
+                <button onClick={() => setShowEditModal(true)} className="btn btn-ghost border border-gray-200 btn-sm gap-1">
                   <Edit size={15} />
                   تعديل
                 </button>
-                <button className="btn btn-icon btn-ghost btn-sm">
-                  <MoreVertical size={16} />
+                <button onClick={handleDeleteStudent} className="btn btn-icon btn-ghost btn-sm text-red-500 hover:bg-red-50">
+                  <Trash2 size={16} />
                 </button>
               </div>
             </div>
@@ -703,6 +732,15 @@ export const StudentDetailPage: React.FC<StudentDetailPageProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* نافذة التعديل */}
+      {showEditModal && (
+        <StudentFormModal 
+          student={student}
+          onClose={() => setShowEditModal(false)} 
+          onSave={handleUpdateStudent} 
+        />
       )}
     </div>
   );

@@ -35,6 +35,7 @@ export const StudentsPage: React.FC<{ onNavigate: (page: string, id?: string) =>
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null); // حالة التعديل
   const [sortBy, setSortBy] = useState<string>('nameAr');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [teacherFilter, setTeacherFilter] = useState('');
@@ -61,28 +62,58 @@ export const StudentsPage: React.FC<{ onNavigate: (page: string, id?: string) =>
     fetchStudents();
   }, []);
 
-  const handleAddStudent = async (data: Partial<Student>) => {
+  // دالة مدمجة للحفظ والتعديل معاً
+  const handleSaveStudent = async (data: Partial<Student>) => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
-      const response = await fetch(`${apiUrl}/students`, {
-        method: 'POST',
+      const studentId = editingStudent?.id || data.id; // تحديد ما إذا كان طالباً جديداً أم موجوداً
+      const url = studentId ? `${apiUrl}/students/${studentId}` : `${apiUrl}/students`;
+      const method = studentId ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           nameAr: data.nameAr,
           nameEn: data.nameEn,
           email: data.user?.email,
           nationality: data.nationality,
-          status: 'LEAD'
+          status: data.status || 'LEAD'
         }),
       });
 
       if (!response.ok) throw new Error('فشل حفظ الطالب');
       const savedStudent = await response.json();
-      setStudents((prev) => [savedStudent, ...prev]);
-      setShowAddModal(false);
+
+      if (studentId) {
+        // تحديث الطالب في القائمة الحالية
+        setStudents((prev) => prev.map((s) => s.id === studentId ? savedStudent : s));
+        setEditingStudent(null);
+      } else {
+        // إضافة طالب جديد للقائمة
+        setStudents((prev) => [savedStudent, ...prev]);
+        setShowAddModal(false);
+      }
     } catch (error) {
       console.error("خطأ أثناء الحفظ:", error);
       alert("حدث خطأ أثناء حفظ الطالب، يرجى المحاولة مرة أخرى.");
+    }
+  };
+
+  // دالة الحذف
+  const handleDeleteStudent = async (id: string) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذا الطالب نهائياً؟')) return;
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const response = await fetch(`${apiUrl}/students/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('فشل الحذف');
+      setStudents((prev) => prev.filter(s => s.id !== id));
+    } catch (error) {
+      console.error("خطأ أثناء الحذف:", error);
+      alert("حدث خطأ أثناء حذف الطالب.");
     }
   };
 
@@ -230,10 +261,10 @@ export const StudentsPage: React.FC<{ onNavigate: (page: string, id?: string) =>
                         <button onClick={() => setSelectedStudent(student.id)} className="btn btn-icon btn-ghost btn-sm tooltip" data-tip="عرض">
                           <Eye size={15} />
                         </button>
-                        <button className="btn btn-icon btn-ghost btn-sm tooltip" data-tip="تعديل">
+                        <button onClick={() => setEditingStudent(student)} className="btn btn-icon btn-ghost btn-sm tooltip" data-tip="تعديل">
                           <Edit size={15} />
                         </button>
-                        <button className="btn btn-icon btn-ghost btn-sm text-red-400 tooltip" data-tip="حذف">
+                        <button onClick={() => handleDeleteStudent(student.id)} className="btn btn-icon btn-ghost btn-sm text-red-400 tooltip" data-tip="حذف">
                           <Trash2 size={15} />
                         </button>
                       </div>
@@ -246,7 +277,10 @@ export const StudentsPage: React.FC<{ onNavigate: (page: string, id?: string) =>
         </div>
       </div>
 
-      {showAddModal && <StudentFormModal onClose={() => setShowAddModal(false)} onSave={handleAddStudent} />}
+      {showAddModal && <StudentFormModal onClose={() => setShowAddModal(false)} onSave={handleSaveStudent} />}
+      
+      {/* نافذة التعديل تظهر من الجدول مباشرة */}
+      {editingStudent && <StudentFormModal student={editingStudent} onClose={() => setEditingStudent(null)} onSave={handleSaveStudent} />}
     </div>
   );
 };
