@@ -39,7 +39,6 @@ app.post("/students", async (req, res) => {
   }
 });
 
-// مسار تعديل طالب
 app.put("/students/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -58,7 +57,6 @@ app.put("/students/:id", async (req, res) => {
   }
 });
 
-// مسار حذف طالب
 app.delete("/students/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -123,6 +121,59 @@ app.delete("/teachers/:id", async (req, res) => {
     res.status(200).json({ message: "Teacher deleted successfully" });
   } catch (error) {
     res.status(500).json({ error: "Failed to delete teacher" });
+  }
+});
+
+// ==========================================
+// مسار تسجيل الدخول (Login API) المفقود
+// ==========================================
+app.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // 1. البحث عن المستخدم
+    const user = await prisma.user.findUnique({
+      where: { email: email }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "البريد الإلكتروني غير مسجل لدينا" });
+    }
+
+    // 2. التحقق من كلمة المرور
+    if (user.password !== password) {
+      return res.status(401).json({ error: "كلمة المرور غير صحيحة" });
+    }
+
+    // 3. التحقق من حالة الحساب
+    if (!user.isActive) {
+      return res.status(403).json({ error: "هذا الحساب موقوف، يرجى مراجعة الإدارة" });
+    }
+
+    // 4. جلب الاسم حسب الدور (طالب أو معلم)
+    let profileName = 'مدير النظام';
+    if (user.role === 'TEACHER') {
+      const teacher = await prisma.teacher.findUnique({ where: { userId: user.id } });
+      if (teacher) profileName = teacher.nameAr;
+    } else if (user.role === 'STUDENT') {
+      const student = await prisma.student.findUnique({ where: { userId: user.id } });
+      if (student) profileName = student.nameAr;
+    }
+
+    // 5. إرسال بيانات الدخول بنجاح
+    res.status(200).json({
+      message: "تم تسجيل الدخول بنجاح",
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: profileName
+      }
+    });
+
+  } catch (error) {
+    console.error("LOGIN_ERROR:", error);
+    res.status(500).json({ error: "حدث خطأ في الخادم أثناء تسجيل الدخول" });
   }
 });
 
