@@ -26,6 +26,19 @@ enum StudentStatus {
   DROPPED
 }
 
+// الحالات الجديدة للجلسات والحضور
+enum SessionStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -49,7 +62,9 @@ model Student {
   createdAt       DateTime      @default(now())
   
   user            User          @relation(fields: [userId], references: [id])
-  enrollments     Enrollment[]  // ربط الطالب باشتراكاته
+  enrollments     Enrollment[]
+  quranRecords    QuranRecord[]
+  attendances     Attendance[]  // ربط الطالب بسجل حضوره
 }
 
 model Teacher {
@@ -66,7 +81,8 @@ model Teacher {
   createdAt       DateTime @default(now())
 
   user            User     @relation(fields: [userId], references: [id])
-  enrollments     Enrollment[]  // ربط المعلم بالطلاب المشتركين معه
+  enrollments     Enrollment[]
+  sessions        Session[] // ربط المعلم بجلساته
 }
 
 model Course {
@@ -79,22 +95,71 @@ model Course {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
 
-  enrollments   Enrollment[]  // ربط الدورة بالاشتراكات
+  enrollments   Enrollment[]
+  sessions      Session[] // ربط الدورة بالجلسات المجدولة لها
 }
 
-// ==========================================
-// الجدول الجديد: الاشتراكات (Enrollments)
-// ==========================================
 model Enrollment {
   id          String   @id @default(uuid())
   studentId   String
   courseId    String
-  teacherId   String?  // المعلم المسؤول عن تدريس هذا الطالب في هذه الدورة
-  progress    Float    @default(0) // نسبة التقدم المئوية
+  teacherId   String?  
+  progress    Float    @default(0) 
   isActive    Boolean  @default(true)
   enrolledAt  DateTime @default(now())
 
   student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
   course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   teacher     Teacher? @relation(fields: [teacherId], references: [id], onDelete: SetNull)
+}
+
+model QuranRecord {
+  id              String   @id @default(uuid())
+  studentId       String
+  teacherId       String
+  trackType       String   
+  surahStart      String
+  ayahStart       Int?
+  surahEnd        String?
+  ayahEnd         Int?
+  pagesCount      Float
+  recitationScore Float?   
+  tajweedErrors   String[] 
+  teacherNotes    String?
+  createdAt       DateTime @default(now())
+
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+// ==========================================
+// الجداول الجديدة: الجلسات والحضور
+// ==========================================
+model Session {
+  id              String        @id @default(uuid())
+  courseId        String
+  teacherId       String
+  scheduledAt     DateTime      // موعد الجلسة
+  durationMinutes Int           @default(60)
+  status          SessionStatus @default(SCHEDULED)
+  meetingLink     String?       // رابط الزووم أو ميت (اختياري)
+  notes           String?
+  createdAt       DateTime      @default(now())
+
+  course          Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  teacher         Teacher       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  attendances     Attendance[]  // سجلات حضور الطلاب لهذه الجلسة
+}
+
+model Attendance {
+  id          String           @id @default(uuid())
+  sessionId   String
+  studentId   String
+  status      AttendanceStatus @default(PRESENT)
+  notes       String?
+  createdAt   DateTime         @default(now())
+
+  session     Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  student     Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, studentId]) // لمنع تسجيل حضور نفس الطالب في نفس الجلسة مرتين
 }
