@@ -55,9 +55,12 @@ model Teacher {
   userId          String   @unique
   nameAr          String
   nameEn          String?
-  specializations String[]
-  isAvailable     Boolean  @default(true)
+  specialization  String?
+  status          String?  @default("ACTIVE")
+  paymentMethod   String?  @default("HOURLY") // HOURLY or PERCENTAGE
   hourlyRate      Float?
+  percentageRate  Float?
+  isAvailable     Boolean  @default(true)
   createdAt       DateTime @default(now())
 
   user            User     @relation(fields: [userId], references: [id])
