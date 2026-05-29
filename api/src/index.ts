@@ -268,5 +268,58 @@ app.post("/sessions/:sessionId/attendance", async (req, res) => {
 if (process.env.NODE_ENV !== "production") {
   app.listen(8080, () => console.log("Server running on port 8080"));
 }
+// ==========================================
+// مسارات النظام المالي (الطلاب والمعلمين)
+// ==========================================
 
+app.get("/invoices", async (req, res) => {
+  try {
+    const invoices = await prisma.invoice.findMany({
+      include: { student: true },
+      orderBy: { issueDate: 'desc' }
+    });
+    res.status(200).json(invoices);
+  } catch (error) { res.status(500).json({ error: "Failed to fetch invoices" }); }
+});
+
+app.post("/invoices", async (req, res) => {
+  try {
+    const { studentId, amount, status, dueDate, notes } = req.body;
+    const newInvoice = await prisma.invoice.create({
+      data: { studentId, amount: parseFloat(amount), status: status || 'UNPAID', dueDate: new Date(dueDate), notes },
+      include: { student: true }
+    });
+    res.status(201).json(newInvoice);
+  } catch (error) { res.status(500).json({ error: "Failed to create invoice" }); }
+});
+
+app.put("/invoices/:id", async (req, res) => {
+  try {
+    const { id } = req.params; const { status } = req.body;
+    const updated = await prisma.invoice.update({
+      where: { id }, data: { status }, include: { student: true }
+    });
+    res.status(200).json(updated);
+  } catch (error) { res.status(500).json({ error: "Failed to update invoice" }); }
+});
+
+app.get("/salaries", async (req, res) => {
+  try {
+    const salaries = await prisma.teacherSalary.findMany({
+      include: { teacher: true }, orderBy: { createdAt: 'desc' }
+    });
+    res.status(200).json(salaries);
+  } catch (error) { res.status(500).json({ error: "Failed to fetch salaries" }); }
+});
+
+app.post("/salaries", async (req, res) => {
+  try {
+    const { teacherId, month, year, amount, calculationMode, status } = req.body;
+    const newSalary = await prisma.teacherSalary.create({
+      data: { teacherId, month: parseInt(month), year: parseInt(year), amount: parseFloat(amount), calculationMode, status: status || 'PAID', paymentDate: status === 'PAID' ? new Date() : null },
+      include: { teacher: true }
+    });
+    res.status(201).json(newSalary);
+  } catch (error) { res.status(500).json({ error: "Failed to process salary" }); }
+});
 export default app;

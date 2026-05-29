@@ -26,7 +26,6 @@ enum StudentStatus {
   DROPPED
 }
 
-// الحالات الجديدة للجلسات والحضور
 enum SessionStatus {
   SCHEDULED
   COMPLETED
@@ -37,6 +36,18 @@ enum AttendanceStatus {
   PRESENT
   ABSENT
   LATE
+}
+
+// الحالات الجديدة للنظام المالي
+enum InvoiceStatus {
+  PAID
+  UNPAID
+  OVERDUE
+}
+
+enum SalaryStatus {
+  PENDING
+  PAID
 }
 
 model User {
@@ -64,7 +75,8 @@ model Student {
   user            User          @relation(fields: [userId], references: [id])
   enrollments     Enrollment[]
   quranRecords    QuranRecord[]
-  attendances     Attendance[]  // ربط الطالب بسجل حضوره
+  attendances     Attendance[]  
+  invoices        Invoice[]     // ربط الطالب بفواتيره
 }
 
 model Teacher {
@@ -82,7 +94,8 @@ model Teacher {
 
   user            User     @relation(fields: [userId], references: [id])
   enrollments     Enrollment[]
-  sessions        Session[] // ربط المعلم بجلساته
+  sessions        Session[] 
+  salaries        TeacherSalary[] // ربط المعلم بمسير رواتبه
 }
 
 model Course {
@@ -96,7 +109,7 @@ model Course {
   createdAt     DateTime @default(now())
 
   enrollments   Enrollment[]
-  sessions      Session[] // ربط الدورة بالجلسات المجدولة لها
+  sessions      Session[] 
 }
 
 model Enrollment {
@@ -131,23 +144,20 @@ model QuranRecord {
   student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
 }
 
-// ==========================================
-// الجداول الجديدة: الجلسات والحضور
-// ==========================================
 model Session {
   id              String        @id @default(uuid())
   courseId        String
   teacherId       String
-  scheduledAt     DateTime      // موعد الجلسة
+  scheduledAt     DateTime      
   durationMinutes Int           @default(60)
   status          SessionStatus @default(SCHEDULED)
-  meetingLink     String?       // رابط الزووم أو ميت (اختياري)
+  meetingLink     String?       
   notes           String?
   createdAt       DateTime      @default(now())
 
   course          Course        @relation(fields: [courseId], references: [id], onDelete: Cascade)
   teacher         Teacher       @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  attendances     Attendance[]  // سجلات حضور الطلاب لهذه الجلسة
+  attendances     Attendance[]  
 }
 
 model Attendance {
@@ -161,5 +171,36 @@ model Attendance {
   session     Session          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   student     Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
-  @@unique([sessionId, studentId]) // لمنع تسجيل حضور نفس الطالب في نفس الجلسة مرتين
+  @@unique([sessionId, studentId]) 
+}
+
+// ==========================================
+// النظام المالي (الفواتير والرواتب) بالدولار $
+// ==========================================
+
+model Invoice {
+  id          String        @id @default(uuid())
+  studentId   String
+  amount      Float         // المبلغ بالدولار $
+  status      InvoiceStatus @default(UNPAID)
+  issueDate   DateTime      @default(now())
+  dueDate     DateTime
+  notes       String?
+  createdAt   DateTime      @default(now())
+
+  student     Student       @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model TeacherSalary {
+  id              String       @id @default(uuid())
+  teacherId       String
+  month           Int
+  year            Int
+  amount          Float        // المبلغ بالدولار $
+  status          SalaryStatus @default(PENDING)
+  paymentDate     DateTime?
+  calculationMode String       // توثيق طريقة الحساب لحظة الصرف (ساعات أو نسبة)
+  createdAt       DateTime     @default(now())
+
+  teacher         Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 }
