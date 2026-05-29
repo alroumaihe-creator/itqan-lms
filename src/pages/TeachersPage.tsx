@@ -62,6 +62,24 @@ export const TeachersPage: React.FC<{ onNavigate: (page: string) => void }> = ()
     }
   };
 
+  const handleDeleteTeacher = async (id: string) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذا المعلم نهائياً؟')) return;
+    
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const response = await fetch(`${apiUrl}/teachers/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) throw new Error('فشل الحذف');
+      
+      setTeachers((prev) => prev.filter(t => t.id !== id));
+    } catch (error) {
+      console.error("خطأ أثناء الحذف:", error);
+      alert("حدث خطأ أثناء حذف المعلم.");
+    }
+  };
+
   const filtered = useMemo(() => {
     let result = [...teachers];
     if (search) {
@@ -114,7 +132,7 @@ export const TeachersPage: React.FC<{ onNavigate: (page: string) => void }> = ()
 
       <div className="grid-cards">
         {filtered.map((teacher) => (
-          <TeacherCard key={teacher.id} teacher={teacher} />
+          <TeacherCard key={teacher.id} teacher={teacher} onDelete={() => handleDeleteTeacher(teacher.id)} />
         ))}
         {filtered.length === 0 && (
           <div className="col-span-full flex flex-col items-center justify-center py-16 text-gray-400">
@@ -131,7 +149,7 @@ export const TeachersPage: React.FC<{ onNavigate: (page: string) => void }> = ()
   );
 };
 
-const TeacherCard: React.FC<{ teacher: any }> = ({ teacher }) => (
+const TeacherCard: React.FC<{ teacher: any, onDelete: () => void }> = ({ teacher, onDelete }) => (
   <div className="card p-5 card-interactive">
     <div className="flex items-start gap-4 mb-4">
       <Avatar name={teacher.nameAr} size="lg" />
@@ -198,7 +216,7 @@ const TeacherCard: React.FC<{ teacher: any }> = ({ teacher }) => (
       <button className="btn btn-ghost btn-icon btn-sm tooltip" data-tip="تعديل">
         <Edit size={14} />
       </button>
-      <button className="btn btn-ghost btn-icon btn-sm text-red-400 tooltip" data-tip="حذف">
+      <button onClick={onDelete} className="btn btn-ghost btn-icon btn-sm text-red-400 tooltip" data-tip="حذف">
         <Trash2 size={14} />
       </button>
     </div>

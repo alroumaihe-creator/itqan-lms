@@ -2,10 +2,10 @@
 // STUDENT FORM MODAL - Multi-step Student Registration
 // ============================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, User, Users, BookOpen, CreditCard, Check, ChevronLeft } from 'lucide-react';
 import type { Student } from '../../types';
-import { mockCourses, mockTeachers } from '../../data/mockData';
+import { mockCourses } from '../../data/mockData';
 
 interface StudentFormModalProps {
   onClose: () => void;
@@ -26,6 +26,8 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({
   student,
 }) => {
   const [step, setStep] = useState(1);
+  const [realTeachers, setRealTeachers] = useState<any[]>([]); // حالة المعلمين الحقيقيين
+
   const [formData, setFormData] = useState({
     // Step 1
     nameAr: student?.nameAr || '',
@@ -55,6 +57,23 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({
     startDate: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // جلب المعلمين الحقيقيين من السيرفر
+  useEffect(() => {
+    const fetchTeachers = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+        const response = await fetch(`${apiUrl}/teachers`);
+        if (response.ok) {
+          const data = await response.json();
+          setRealTeachers(data);
+        }
+      } catch (error) {
+        console.error("Error fetching teachers:", error);
+      }
+    };
+    fetchTeachers();
+  }, []);
 
   const updateField = (field: string, value: string | string[]) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -411,8 +430,11 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({
                     className={`form-input form-select ${errors.teacherId ? 'error' : ''}`}
                   >
                     <option value="">اختر معلماً...</option>
-                    {mockTeachers.filter((t) => t.isAvailable).map((t) => (
-                      <option key={t.id} value={t.id}>{t.nameAr}</option>
+                    {/* هنا نستخدم قائمة المعلمين الحقيقية من قاعدة البيانات */}
+                    {realTeachers.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nameAr} {t.specialization ? `(${t.specialization})` : ''}
+                      </option>
                     ))}
                   </select>
                   {errors.teacherId && <p className="form-error">{errors.teacherId}</p>}

@@ -57,7 +57,7 @@ app.post("/students", async (req, res) => {
 });
 
 // ==========================================
-// مسارات المعلمين (التي كانت مفقودة)
+// مسارات المعلمين
 // ==========================================
 app.get("/teachers", async (req, res) => {
   try {
@@ -73,7 +73,6 @@ app.get("/teachers", async (req, res) => {
 
 app.post("/teachers", async (req, res) => {
   try {
-    // استقبال البيانات بما فيها النظام المالي
     const { nameAr, nameEn, email, specialization, paymentMethod, hourlyRate, percentageRate, status } = req.body;
     
     const newTeacher = await prisma.teacher.create({
@@ -99,6 +98,20 @@ app.post("/teachers", async (req, res) => {
   } catch (error) {
     console.error("POST_TEACHERS_ERROR:", error);
     res.status(500).json({ error: "Failed to create teacher" });
+  }
+});
+
+// مسار حذف معلم
+app.delete("/teachers/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.teacher.delete({
+      where: { id: id }
+    });
+    res.status(200).json({ message: "Teacher deleted successfully" });
+  } catch (error) {
+    console.error("DELETE_TEACHER_ERROR:", error);
+    res.status(500).json({ error: "Failed to delete teacher" });
   }
 });
 
