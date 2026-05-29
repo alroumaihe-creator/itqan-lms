@@ -36,55 +36,53 @@ app.post("/login", async (req, res) => {
       message: "تم تسجيل الدخول بنجاح",
       user: { id: user.id, email: user.email, role: user.role, name: profileName }
     });
-  } catch (error) {
+  } catch (error: any) {
+    console.error("LOGIN_ERROR:", error);
     res.status(500).json({ error: "حدث خطأ في الخادم" });
   }
 });
 
-// مسارات الطلاب
-app.get("/students", async (req, res) => {
-  try { res.status(200).json(await prisma.student.findMany({ include: { user: true } })); } 
-  catch (error) { res.status(500).json({ error: "Failed" }); }
-});
-
-app.post("/students", async (req, res) => {
-  try {
-    const { nameAr, nameEn, email, nationality, status } = req.body;
-    res.status(201).json(await prisma.student.create({
-      data: { nameAr, nameEn, status: status || 'LEAD', nationality, user: { create: { email: email || `user-${Date.now()}@test.com`, role: 'STUDENT', isActive: true } } },
-      include: { user: true }
-    }));
-  } catch (error) { res.status(500).json({ error: "Failed" }); }
-});
-
-app.put("/students/:id", async (req, res) => {
-  try {
-    const { id } = req.params; const { nameAr, nameEn, email, nationality, status } = req.body;
-    res.status(200).json(await prisma.student.update({
-      where: { id }, data: { nameAr, nameEn, nationality, status, user: { update: { email } } }, include: { user: true }
-    }));
-  } catch (error) { res.status(500).json({ error: "Failed" }); }
-});
-
-app.delete("/students/:id", async (req, res) => {
-  try { await prisma.student.delete({ where: { id: req.params.id } }); res.status(200).json({ message: "Deleted" }); } 
-  catch (error) { res.status(500).json({ error: "Failed" }); }
-});
-
+// ==========================================
 // مسارات المعلمين
+// ==========================================
 app.get("/teachers", async (req, res) => {
   try { res.status(200).json(await prisma.teacher.findMany({ include: { user: true } })); } 
-  catch (error) { res.status(500).json({ error: "Failed" }); }
+  catch (error: any) { console.error(error); res.status(500).json({ error: "Failed to fetch teachers" }); }
 });
 
 app.post("/teachers", async (req, res) => {
   try {
     const { nameAr, nameEn, email, specialization, paymentMethod, hourlyRate, percentageRate, status } = req.body;
-    res.status(201).json(await prisma.teacher.create({
-      data: { nameAr, nameEn, specialization, status: status || 'ACTIVE', paymentMethod: paymentMethod || 'HOURLY', hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null, percentageRate: percentageRate ? parseFloat(percentageRate) : null, user: { create: { email: email || `teacher-${Date.now()}@test.com`, role: 'TEACHER', isActive: true } } },
+    
+    // 1. الفحص الذكي: هل الإيميل موجود مسبقاً؟
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    
+    // 2. إنشاء المعلم والربط
+    const newTeacher = await prisma.teacher.create({
+      data: { 
+        nameAr, nameEn, specialization, status: status || 'ACTIVE', 
+        paymentMethod: paymentMethod || 'HOURLY', 
+        hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null, 
+        percentageRate: percentageRate ? parseFloat(percentageRate) : null, 
+        // إذا كان الإيميل موجوداً نربطه به، وإذا لم يكن موجوداً ننشئ مستخدم جديد
+        ...(existingUser 
+          ? { user: { connect: { id: existingUser.id } } } 
+          : { user: { create: { email: email || `teacher-${Date.now()}@test.com`, role: 'TEACHER', isActive: true } } }
+        )
+      },
       include: { user: true }
-    }));
-  } catch (error) { res.status(500).json({ error: "Failed" }); }
+    });
+
+    // تحديث صلاحية المستخدم القديم ليكون "معلم" إذا لزم الأمر
+    if (existingUser && existingUser.role !== 'SUPER_ADMIN' && existingUser.role !== 'ADMIN') {
+        await prisma.user.update({ where: { id: existingUser.id }, data: { role: 'TEACHER' } });
+    }
+
+    res.status(201).json(newTeacher);
+  } catch (error: any) { 
+    console.error("CREATE_TEACHER_ERROR:", error); 
+    res.status(500).json({ error: error.message || "Failed to create teacher" }); 
+  }
 });
 
 app.put("/teachers/:id", async (req, res) => {
@@ -93,43 +91,89 @@ app.put("/teachers/:id", async (req, res) => {
     res.status(200).json(await prisma.teacher.update({
       where: { id }, data: { nameAr, nameEn, specialization, status, paymentMethod, hourlyRate: hourlyRate ? parseFloat(hourlyRate) : null, percentageRate: percentageRate ? parseFloat(percentageRate) : null, user: { update: { email } } }, include: { user: true }
     }));
-  } catch (error) { res.status(500).json({ error: "Failed" }); }
+  } catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
 
 app.delete("/teachers/:id", async (req, res) => {
   try { await prisma.teacher.delete({ where: { id: req.params.id } }); res.status(200).json({ message: "Deleted" }); } 
-  catch (error) { res.status(500).json({ error: "Failed" }); }
+  catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
 
+// ==========================================
+// مسارات الطلاب
+// ==========================================
+app.get("/students", async (req, res) => {
+  try { res.status(200).json(await prisma.student.findMany({ include: { user: true } })); } 
+  catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.post("/students", async (req, res) => {
+  try {
+    const { nameAr, nameEn, email, nationality, status } = req.body;
+    
+    // الفحص الذكي للطالب
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+
+    res.status(201).json(await prisma.student.create({
+      data: { 
+        nameAr, nameEn, status: status || 'LEAD', nationality, 
+        ...(existingUser 
+          ? { user: { connect: { id: existingUser.id } } } 
+          : { user: { create: { email: email || `user-${Date.now()}@test.com`, role: 'STUDENT', isActive: true } } }
+        )
+      },
+      include: { user: true }
+    }));
+  } catch (error: any) { console.error("CREATE_STUDENT_ERROR:", error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.put("/students/:id", async (req, res) => {
+  try {
+    const { id } = req.params; const { nameAr, nameEn, email, nationality, status } = req.body;
+    res.status(200).json(await prisma.student.update({
+      where: { id }, data: { nameAr, nameEn, nationality, status, user: { update: { email } } }, include: { user: true }
+    }));
+  } catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+app.delete("/students/:id", async (req, res) => {
+  try { await prisma.student.delete({ where: { id: req.params.id } }); res.status(200).json({ message: "Deleted" }); } 
+  catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
+});
+
+// ==========================================
 // مسارات الدورات
+// ==========================================
 app.get("/courses", async (req, res) => {
   try { res.status(200).json(await prisma.course.findMany({ orderBy: { createdAt: 'desc' } })); } 
-  catch (error) { res.status(500).json({ error: "Failed" }); }
+  catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
 
 app.post("/courses", async (req, res) => {
   try {
     const { nameAr, nameEn, type, level, price, isActive } = req.body;
     res.status(201).json(await prisma.course.create({ data: { nameAr, nameEn, type, level: parseInt(level) || 1, price: price ? parseFloat(price) : null, isActive: isActive !== undefined ? isActive : true } }));
-  } catch (error) { res.status(500).json({ error: "Failed" }); }
+  } catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
 
 app.put("/courses/:id", async (req, res) => {
   try {
     const { id } = req.params; const { nameAr, nameEn, type, level, price, isActive } = req.body;
     res.status(200).json(await prisma.course.update({ where: { id }, data: { nameAr, nameEn, type, level: parseInt(level) || 1, price: price ? parseFloat(price) : null, isActive } }));
-  } catch (error) { res.status(500).json({ error: "Failed" }); }
+  } catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
 
 app.delete("/courses/:id", async (req, res) => {
   try { await prisma.course.delete({ where: { id: req.params.id } }); res.status(200).json({ message: "Deleted" }); } 
-  catch (error) { res.status(500).json({ error: "Failed" }); }
+  catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
 
+// ==========================================
 // مسارات الاشتراكات
+// ==========================================
 app.get("/enrollments", async (req, res) => {
   try { res.status(200).json(await prisma.enrollment.findMany({ include: { student: true, course: true, teacher: true }, orderBy: { enrolledAt: 'desc' } })); } 
-  catch (error) { res.status(500).json({ error: "Failed" }); }
+  catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
 
 app.post("/enrollments", async (req, res) => {
@@ -138,23 +182,25 @@ app.post("/enrollments", async (req, res) => {
     const existing = await prisma.enrollment.findFirst({ where: { studentId, courseId } });
     if (existing) return res.status(400).json({ error: "الطالب مسجل بالفعل" });
     res.status(201).json(await prisma.enrollment.create({ data: { studentId, courseId, teacherId: teacherId || null }, include: { student: true, course: true, teacher: true } }));
-  } catch (error) { res.status(500).json({ error: "Failed" }); }
+  } catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
 
 app.delete("/enrollments/:id", async (req, res) => {
   try { await prisma.enrollment.delete({ where: { id: req.params.id } }); res.status(200).json({ message: "Deleted" }); } 
-  catch (error) { res.status(500).json({ error: "Failed" }); }
+  catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
 
+// ==========================================
 // مسارات سجل القرآن
+// ==========================================
 app.get("/quran-records", async (req, res) => {
   try { res.status(200).json(await prisma.quranRecord.findMany({ include: { student: true }, orderBy: { createdAt: 'desc' } })); } 
-  catch (error) { res.status(500).json({ error: "Failed" }); }
+  catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
 
 app.get("/quran-records/:studentId", async (req, res) => {
   try { res.status(200).json(await prisma.quranRecord.findMany({ where: { studentId: req.params.studentId }, orderBy: { createdAt: 'desc' } })); } 
-  catch (error) { res.status(500).json({ error: "Failed" }); }
+  catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
 
 app.post("/quran-records", async (req, res) => {
@@ -163,13 +209,12 @@ app.post("/quran-records", async (req, res) => {
     const newRecord = await prisma.quranRecord.create({ data: { studentId, teacherId, trackType, surahStart, ayahStart: ayahStart ? parseInt(ayahStart) : null, surahEnd, ayahEnd: ayahEnd ? parseInt(ayahEnd) : null, pagesCount: parseFloat(pagesCount) || 0, recitationScore: recitationScore ? parseFloat(recitationScore) : null, tajweedErrors: tajweedErrors || [], teacherNotes } });
     await prisma.enrollment.updateMany({ where: { studentId, teacherId }, data: { progress: { increment: parseFloat(pagesCount) * 0.16 } } });
     res.status(201).json(newRecord);
-  } catch (error) { res.status(500).json({ error: "Failed" }); }
+  } catch (error: any) { console.error(error); res.status(500).json({ error: "Failed" }); }
 });
 
 // ==========================================
 // مسارات الجلسات والحضور 
 // ==========================================
-
 app.get("/sessions", async (req, res) => {
   try {
     const sessions = await prisma.session.findMany({
@@ -177,37 +222,26 @@ app.get("/sessions", async (req, res) => {
       orderBy: { scheduledAt: 'asc' }
     });
     res.status(200).json(sessions);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch sessions" });
-  }
+  } catch (error: any) { console.error(error); res.status(500).json({ error: "Failed to fetch sessions" }); }
 });
 
 app.post("/sessions", async (req, res) => {
   try {
     const { courseId, teacherId, scheduledAt, durationMinutes, meetingLink, notes } = req.body;
     const newSession = await prisma.session.create({
-      data: {
-        courseId, teacherId, scheduledAt: new Date(scheduledAt),
-        durationMinutes: parseInt(durationMinutes) || 60, meetingLink, notes
-      },
+      data: { courseId, teacherId, scheduledAt: new Date(scheduledAt), durationMinutes: parseInt(durationMinutes) || 60, meetingLink, notes },
       include: { course: true, teacher: true }
     });
     res.status(201).json(newSession);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to create session" });
-  }
+  } catch (error: any) { console.error(error); res.status(500).json({ error: "Failed to create session" }); }
 });
 
-// مسار حذف الجلسة (الجديد)
 app.delete("/sessions/:id", async (req, res) => {
   try {
     const { id } = req.params;
     await prisma.session.delete({ where: { id } });
     res.status(200).json({ message: "Session deleted successfully" });
-  } catch (error) {
-    console.error("DELETE_SESSION_ERROR:", error);
-    res.status(500).json({ error: "Failed to delete session" });
-  }
+  } catch (error: any) { console.error("DELETE_SESSION_ERROR:", error); res.status(500).json({ error: "Failed to delete session" }); }
 });
 
 app.post("/sessions/:sessionId/attendance", async (req, res) => {
@@ -228,9 +262,7 @@ app.post("/sessions/:sessionId/attendance", async (req, res) => {
     }
     
     res.status(200).json({ message: "Attendance marked successfully", results });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to mark attendance" });
-  }
+  } catch (error: any) { console.error(error); res.status(500).json({ error: "Failed to mark attendance" }); }
 });
 
 if (process.env.NODE_ENV !== "production") {
