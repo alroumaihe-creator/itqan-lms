@@ -21,6 +21,7 @@ app.get("/students", async (req, res) => {
     });
     res.status(200).json(students);
   } catch (error) {
+    console.error("GET_STUDENTS_ERROR:", error);
     res.status(500).json({ error: "Failed to fetch students" });
   }
 });
@@ -47,6 +48,8 @@ app.post("/students", async (req, res) => {
     });
     res.status(201).json(newStudent);
   } catch (error) {
+    // هذا السطر مهم جداً لكشف أي خطأ في قاعدة البيانات
+    console.error("PRISMA_ERROR:", error); 
     res.status(500).json({ error: "Failed to create student" });
   }
 });
