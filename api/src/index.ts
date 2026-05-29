@@ -167,10 +167,9 @@ app.post("/quran-records", async (req, res) => {
 });
 
 // ==========================================
-// مسارات الجلسات والحضور (الجديدة)
+// مسارات الجلسات والحضور 
 // ==========================================
 
-// جلب جميع الجلسات (يمكن فلترتها بالـ teacherId في الواجهة)
 app.get("/sessions", async (req, res) => {
   try {
     const sessions = await prisma.session.findMany({
@@ -183,59 +182,53 @@ app.get("/sessions", async (req, res) => {
   }
 });
 
-// إنشاء جلسة جديدة (يتم بواسطة الإدارة أو المعلم)
 app.post("/sessions", async (req, res) => {
   try {
     const { courseId, teacherId, scheduledAt, durationMinutes, meetingLink, notes } = req.body;
     const newSession = await prisma.session.create({
       data: {
-        courseId,
-        teacherId,
-        scheduledAt: new Date(scheduledAt),
-        durationMinutes: parseInt(durationMinutes) || 60,
-        meetingLink,
-        notes
+        courseId, teacherId, scheduledAt: new Date(scheduledAt),
+        durationMinutes: parseInt(durationMinutes) || 60, meetingLink, notes
       },
       include: { course: true, teacher: true }
     });
     res.status(201).json(newSession);
   } catch (error) {
-    console.error(error);
     res.status(500).json({ error: "Failed to create session" });
   }
 });
 
-// تسجيل الحضور دفعة واحدة لجلسة معينة
+// مسار حذف الجلسة (الجديد)
+app.delete("/sessions/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.session.delete({ where: { id } });
+    res.status(200).json({ message: "Session deleted successfully" });
+  } catch (error) {
+    console.error("DELETE_SESSION_ERROR:", error);
+    res.status(500).json({ error: "Failed to delete session" });
+  }
+});
+
 app.post("/sessions/:sessionId/attendance", async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { attendances } = req.body; // مصفوفة تحتوي على { studentId, status }
+    const { attendances } = req.body; 
 
-    // تغيير حالة الجلسة إلى "مكتملة" بمجرد رصد الحضور
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { status: 'COMPLETED' }
-    });
+    await prisma.session.update({ where: { id: sessionId }, data: { status: 'COMPLETED' } });
 
     const results = [];
     for (const record of attendances) {
       const upserted = await prisma.attendance.upsert({
-        where: {
-          sessionId_studentId: { sessionId: sessionId, studentId: record.studentId }
-        },
+        where: { sessionId_studentId: { sessionId: sessionId, studentId: record.studentId } },
         update: { status: record.status },
-        create: {
-          sessionId: sessionId,
-          studentId: record.studentId,
-          status: record.status
-        }
+        create: { sessionId: sessionId, studentId: record.studentId, status: record.status }
       });
       results.push(upserted);
     }
     
     res.status(200).json({ message: "Attendance marked successfully", results });
   } catch (error) {
-    console.error(error);
     res.status(500).json({ error: "Failed to mark attendance" });
   }
 });
