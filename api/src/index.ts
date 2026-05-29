@@ -214,16 +214,11 @@ app.delete("/courses/:id", async (req, res) => {
 app.get("/enrollments", async (req, res) => {
   try {
     const enrollments = await prisma.enrollment.findMany({
-      include: { 
-        student: true, 
-        course: true, 
-        teacher: true 
-      },
+      include: { student: true, course: true, teacher: true },
       orderBy: { enrolledAt: 'desc' }
     });
     res.status(200).json(enrollments);
   } catch (error) {
-    console.error("GET_ENROLLMENTS_ERROR:", error);
     res.status(500).json({ error: "Failed to fetch enrollments" });
   }
 });
@@ -231,27 +226,16 @@ app.get("/enrollments", async (req, res) => {
 app.post("/enrollments", async (req, res) => {
   try {
     const { studentId, courseId, teacherId } = req.body;
-    
-    // التأكد من عدم وجود اشتراك مسبق لنفس الطالب في نفس الدورة
-    const existingEnrollment = await prisma.enrollment.findFirst({
-      where: { studentId, courseId }
-    });
+    const existingEnrollment = await prisma.enrollment.findFirst({ where: { studentId, courseId } });
 
-    if (existingEnrollment) {
-      return res.status(400).json({ error: "الطالب مسجل بالفعل في هذه الدورة" });
-    }
+    if (existingEnrollment) return res.status(400).json({ error: "الطالب مسجل بالفعل في هذه الدورة" });
 
     const newEnrollment = await prisma.enrollment.create({
-      data: { 
-        studentId, 
-        courseId, 
-        teacherId: teacherId || null 
-      },
+      data: { studentId, courseId, teacherId: teacherId || null },
       include: { student: true, course: true, teacher: true }
     });
     res.status(201).json(newEnrollment);
   } catch (error) {
-    console.error("POST_ENROLLMENT_ERROR:", error);
     res.status(500).json({ error: "Failed to create enrollment" });
   }
 });
@@ -262,8 +246,63 @@ app.delete("/enrollments/:id", async (req, res) => {
     await prisma.enrollment.delete({ where: { id } });
     res.status(200).json({ message: "Enrollment deleted successfully" });
   } catch (error) {
-    console.error("DELETE_ENROLLMENT_ERROR:", error);
     res.status(500).json({ error: "Failed to delete enrollment" });
+  }
+});
+
+// ==========================================
+// مسارات سجل القرآن (Quran Records)
+// ==========================================
+app.get("/quran-records", async (req, res) => {
+  try {
+    const records = await prisma.quranRecord.findMany({
+      include: { student: true },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.status(200).json(records);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch all quran records" });
+  }
+});
+
+app.get("/quran-records/:studentId", async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const records = await prisma.quranRecord.findMany({
+      where: { studentId },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.status(200).json(records);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch quran records" });
+  }
+});
+
+app.post("/quran-records", async (req, res) => {
+  try {
+    const { studentId, teacherId, trackType, surahStart, ayahStart, surahEnd, ayahEnd, pagesCount, recitationScore, tajweedErrors, teacherNotes } = req.body;
+    
+    const newRecord = await prisma.quranRecord.create({
+      data: {
+        studentId, teacherId, trackType, surahStart,
+        ayahStart: ayahStart ? parseInt(ayahStart) : null,
+        surahEnd,
+        ayahEnd: ayahEnd ? parseInt(ayahEnd) : null,
+        pagesCount: parseFloat(pagesCount) || 0,
+        recitationScore: recitationScore ? parseFloat(recitationScore) : null,
+        tajweedErrors: tajweedErrors || [],
+        teacherNotes
+      }
+    });
+
+    await prisma.enrollment.updateMany({
+      where: { studentId, teacherId },
+      data: { progress: { increment: parseFloat(pagesCount) * 0.16 } }
+    });
+
+    res.status(201).json(newRecord);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to create quran record" });
   }
 });
 

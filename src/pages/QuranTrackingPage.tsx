@@ -1,30 +1,64 @@
 // ============================================================
-// QURAN TRACKING PAGE - Record & View Progress
+// QURAN TRACKING PAGE - Record & View Progress (Connected to API)
 // ============================================================
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
-  BookMarked, Plus, Star, CheckCircle, XCircle, Filter, Search
+  BookMarked, Plus, Star, CheckCircle, XCircle, Search
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer
 } from 'recharts';
-import { mockQuranRecords, mockStudents, mockQuranProgressData } from '../data/mockData';
+import { mockQuranProgressData } from '../data/mockData';
 import { Avatar } from '../components/shared/Avatar';
-import {
-  TRACK_TYPE_LABELS, TAJWEED_ERRORS, getSurahName, formatRelativeTime
-} from '../utils/formatters';
+import { TRACK_TYPE_LABELS, getSurahName, formatRelativeTime } from '../utils/formatters';
 import type { QuranTrackType } from '../types';
 
 export const QuranTrackingPage: React.FC = () => {
+  const [records, setRecords] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState('');
+  const [search, setSearch] = useState('');
 
-  const totalPages = mockQuranRecords.reduce((s, r) => s + (r.pagesCount || 0), 0);
-  const avgScore = mockQuranRecords.length > 0
-    ? mockQuranRecords.reduce((s, r) => s + (r.recitationScore || 0), 0) / mockQuranRecords.length
-    : 0;
+  const fetchRecords = async () => {
+    try {
+      setIsLoading(true);
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const response = await fetch(`${apiUrl}/quran-records`);
+      if (response.ok) {
+        const data = await response.json();
+        setRecords(data);
+      }
+    } catch (error) {
+      console.error("خطأ في جلب السجلات:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecords();
+  }, []);
+
+  // حساب المؤشرات تلقائياً من البيانات الحقيقية
+  const totalPages = useMemo(() => records.reduce((s, r) => s + (r.pagesCount || 0), 0), [records]);
+  const avgScore = useMemo(() => records.length > 0 ? records.reduce((s, r) => s + (r.recitationScore || 0), 0) / records.length : 0, [records]);
+  const highAchieversCount = useMemo(() => records.filter((r) => r.recitationScore >= 8.5).length, [records]);
+
+  const filteredRecords = useMemo(() => {
+    if (!search) return records;
+    return records.filter(r => r.student?.nameAr?.toLowerCase().includes(search.toLowerCase()) || r.surahStart?.toLowerCase().includes(search.toLowerCase()));
+  }, [records, search]);
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <div className="w-12 h-12 border-4 border-[#1B4F72] border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-gray-500 font-medium">جاري جلب سجلات تتبع القرآن...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 animate-fadeIn">
@@ -32,7 +66,7 @@ export const QuranTrackingPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-gray-800">تتبع القرآن</h1>
-          <p className="text-gray-400 text-sm">{mockQuranRecords.length} سجل</p>
+          <p className="text-gray-400 text-sm">{filteredRecords.length} سجل متاح</p>
         </div>
         <button onClick={() => setShowAddModal(true)} className="btn btn-primary gap-2">
           <Plus size={18} />
@@ -51,14 +85,12 @@ export const QuranTrackingPage: React.FC = () => {
           <p className="text-3xl font-black text-[#27AE60]">{avgScore.toFixed(1)}/10</p>
         </div>
         <div className="stat-card" style={{ borderRightColor: '#F39C12' }}>
-          <p className="text-xs text-gray-400 mb-1">جلسات هذا الأسبوع</p>
-          <p className="text-3xl font-black text-[#F39C12]">4</p>
+          <p className="text-xs text-gray-400 mb-1">حلقات رُصدت</p>
+          <p className="text-3xl font-black text-[#F39C12]">{records.length}</p>
         </div>
         <div className="stat-card" style={{ borderRightColor: '#9B59B6' }}>
-          <p className="text-xs text-gray-400 mb-1">حققوا الهدف</p>
-          <p className="text-3xl font-black text-[#9B59B6]">
-            {mockQuranRecords.filter((r) => r.weeklyGoalMet).length}
-          </p>
+          <p className="text-xs text-gray-400 mb-1">ممتاز (8.5+)</p>
+          <p className="text-3xl font-black text-[#9B59B6]">{highAchieversCount}</p>
         </div>
       </div>
 
@@ -86,7 +118,7 @@ export const QuranTrackingPage: React.FC = () => {
           <div className="flex gap-2">
             <div className="relative">
               <Search size={16} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input type="text" placeholder="بحث..." className="form-input pr-8 py-1.5 text-sm" />
+              <input type="text" placeholder="بحث باسم الطالب..." value={search} onChange={(e) => setSearch(e.target.value)} className="form-input pr-8 py-1.5 text-sm" />
             </div>
           </div>
         </div>
@@ -100,29 +132,29 @@ export const QuranTrackingPage: React.FC = () => {
                 <th>الصفحات</th>
                 <th>الدرجة</th>
                 <th>أخطاء التجويد</th>
-                <th>الهدف</th>
+                <th>الحالة</th>
                 <th>التاريخ</th>
               </tr>
             </thead>
             <tbody>
-              {mockQuranRecords.map((record) => (
+              {filteredRecords.map((record) => (
                 <tr key={record.id}>
                   <td>
                     <div className="flex items-center gap-2">
                       <Avatar name={record.student?.nameAr || 'طالب'} size="xs" />
-                      <span className="text-sm font-medium">{record.student?.nameAr}</span>
+                      <span className="text-sm font-medium">{record.student?.nameAr || 'طالب محذوف'}</span>
                     </div>
                   </td>
                   <td>
                     <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 font-medium">
-                      {TRACK_TYPE_LABELS[record.trackType]}
+                      {TRACK_TYPE_LABELS[record.trackType] || record.trackType}
                     </span>
                   </td>
                   <td className="text-sm">
                     {record.surahStart && (
                       <span>
-                        {getSurahName(record.surahStart)} ({record.ayahStart})
-                        {record.surahEnd && ` ← ${getSurahName(record.surahEnd)} (${record.ayahEnd})`}
+                        {getSurahName(record.surahStart) || record.surahStart} ({record.ayahStart || 1})
+                        {record.surahEnd && ` ← ${getSurahName(record.surahEnd) || record.surahEnd} (${record.ayahEnd || 1})`}
                       </span>
                     )}
                   </td>
@@ -135,47 +167,94 @@ export const QuranTrackingPage: React.FC = () => {
                   </td>
                   <td>
                     <div className="flex flex-wrap gap-0.5">
-                      {record.tajweedErrors.slice(0, 2).map((e) => (
+                      {record.tajweedErrors?.slice(0, 2).map((e: string) => (
                         <span key={e} className="text-xs px-1.5 py-0.5 bg-red-50 text-red-600 rounded">
                           {e}
                         </span>
                       ))}
-                      {record.tajweedErrors.length > 2 && (
-                        <span className="text-xs text-gray-400">+{record.tajweedErrors.length - 2}</span>
-                      )}
                     </div>
                   </td>
                   <td>
-                    {record.weeklyGoalMet === true ? (
+                    {record.recitationScore >= 8 ? (
                       <CheckCircle size={16} className="text-green-500" />
-                    ) : record.weeklyGoalMet === false ? (
+                    ) : (
                       <XCircle size={16} className="text-red-400" />
-                    ) : '—'}
+                    )}
                   </td>
-                  <td className="text-xs text-gray-400">{formatRelativeTime(record.date)}</td>
+                  <td className="text-xs text-gray-400">{formatRelativeTime(record.createdAt)}</td>
                 </tr>
               ))}
+              {filteredRecords.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="text-center py-8 text-gray-400">لا توجد سجلات مطابقة للبحث</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Add Record Modal */}
-      {showAddModal && <QuranRecordModal onClose={() => setShowAddModal(false)} />}
+      {showAddModal && <QuranRecordModal onClose={() => setShowAddModal(false)} onSave={fetchRecords} />}
     </div>
   );
 };
 
-const QuranRecordModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+const QuranRecordModal: React.FC<{ onClose: () => void, onSave: () => void }> = ({ onClose, onSave }) => {
+  const [realStudents, setRealStudents] = useState<any[]>([]);
+  const [realTeachers, setRealTeachers] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
   const [trackType, setTrackType] = useState<QuranTrackType>('NEW_MEMORIZATION');
-  const [score, setScore] = useState(0);
+  const [score, setScore] = useState(10);
   const [selectedErrors, setSelectedErrors] = useState<string[]>([]);
-  const [weeklyGoal, setWeeklyGoal] = useState<boolean | null>(null);
+  const [studentId, setStudentId] = useState('');
+  const [teacherId, setTeacherId] = useState('');
+  const [surahStart, setSurahStart] = useState('');
+  const [ayahStart, setAyahStart] = useState('');
+  const [surahEnd, setSurahEnd] = useState('');
+  const [ayahEnd, setAyahEnd] = useState('');
+  const [pagesCount, setPagesCount] = useState('');
+  const [teacherNotes, setTeacherNotes] = useState('');
+
+  useEffect(() => {
+    const loadFormData = async () => {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const [sRes, tRes] = await Promise.all([fetch(`${apiUrl}/students`), fetch(`${apiUrl}/teachers`)]);
+      if (sRes.ok) setRealStudents(await sRes.json());
+      if (tRes.ok) setRealTeachers(await tRes.json());
+    };
+    loadFormData();
+  }, []);
 
   const toggleError = (err: string) => {
-    setSelectedErrors((prev) =>
-      prev.includes(err) ? prev.filter((e) => e !== err) : [...prev, err]
-    );
+    setSelectedErrors((prev) => prev.includes(err) ? prev.filter((e) => e !== err) : [...prev, err]);
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!studentId || !teacherId) return alert('يرجى اختيار الطالب والمعلم');
+    setIsLoading(true);
+
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const response = await fetch(`${apiUrl}/quran-records`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentId, teacherId, trackType, surahStart, ayahStart, surahEnd, ayahEnd,
+          pagesCount, recitationScore: score, tajweedErrors: selectedErrors, teacherNotes
+        })
+      });
+
+      if (response.ok) {
+        onSave();
+        onClose();
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -184,166 +263,69 @@ const QuranRecordModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         <div className="modal-header">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <BookMarked size={20} className="text-[#1B4F72]" />
-            تسجيل جلسة قرآنية
+            تسجيل جلسة قرآنية إدارية
           </h2>
           <button onClick={onClose} className="btn btn-icon btn-ghost">✕</button>
         </div>
-        <div className="modal-body space-y-5">
-          {/* Student & Session */}
+        <form onSubmit={handleFormSubmit} className="modal-body space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="form-group">
               <label className="form-label required">الطالب</label>
-              <select className="form-input form-select">
+              <select required className="form-input form-select" value={studentId} onChange={e => setStudentId(e.target.value)}>
                 <option value="">اختر طالباً...</option>
-                {mockStudents.filter((s) => s.status === 'ACTIVE').map((s) => (
-                  <option key={s.id} value={s.id}>{s.nameAr}</option>
-                ))}
+                {realStudents.map((s) => <option key={s.id} value={s.id}>{s.nameAr}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label className="form-label required">تاريخ الجلسة</label>
-              <input type="date" className="form-input" defaultValue={new Date().toISOString().split('T')[0]} />
+              <label className="form-label required">المعلم المسؤول</label>
+              <select required className="form-input form-select" value={teacherId} onChange={e => setTeacherId(e.target.value)}>
+                <option value="">اختر معلماً...</option>
+                {realTeachers.map((t) => <option key={t.id} value={t.id}>{t.nameAr}</option>)}
+              </select>
             </div>
           </div>
 
-          {/* Track Type */}
           <div className="form-group">
             <label className="form-label required">نوع الجلسة</label>
             <div className="grid grid-cols-2 gap-2">
               {(['NEW_MEMORIZATION', 'REVISION', 'READING', 'TAJWEED'] as QuranTrackType[]).map((type) => (
-                <button
-                  key={type}
-                  onClick={() => setTrackType(type)}
-                  className={`py-2.5 px-4 rounded-xl border-2 text-sm font-semibold transition-all ${
-                    trackType === type
-                      ? 'border-[#1B4F72] bg-blue-50 text-[#1B4F72]'
-                      : 'border-gray-100 text-gray-500 hover:border-gray-300'
-                  }`}
-                >
-                  {TRACK_TYPE_LABELS[type]}
+                <button type="button" key={type} onClick={() => setTrackType(type)} className={`py-2 px-4 rounded-xl border-2 text-sm font-semibold transition-all ${trackType === type ? 'border-[#1B4F72] bg-blue-50 text-[#1B4F72]' : 'border-gray-100 text-gray-500'}`}>
+                  {TRACK_TYPE_LABELS[type] || type}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Quran Position */}
-          <div>
-            <p className="form-label mb-2">الموضع في القرآن</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="border border-gray-100 rounded-xl p-3">
-                <p className="text-xs text-gray-400 mb-2 font-semibold">من</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="form-group">
-                    <label className="form-label text-xs">السورة</label>
-                    <input type="number" min={1} max={114} className="form-input text-sm" placeholder="1" dir="ltr" />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label text-xs">الآية</label>
-                    <input type="number" min={1} className="form-input text-sm" placeholder="1" dir="ltr" />
-                  </div>
-                </div>
-              </div>
-              <div className="border border-gray-100 rounded-xl p-3">
-                <p className="text-xs text-gray-400 mb-2 font-semibold">إلى</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="form-group">
-                    <label className="form-label text-xs">السورة</label>
-                    <input type="number" min={1} max={114} className="form-input text-sm" placeholder="1" dir="ltr" />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label text-xs">الآية</label>
-                    <input type="number" min={1} className="form-input text-sm" placeholder="7" dir="ltr" />
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="grid grid-cols-2 gap-4 bg-gray-50 p-3 rounded-xl border border-gray-100">
+            <input required type="text" className="form-input text-sm" placeholder="من سورة" value={surahStart} onChange={e => setSurahStart(e.target.value)} />
+            <input type="number" className="form-input text-sm" placeholder="الآية" value={ayahStart} onChange={e => setAyahStart(e.target.value)} />
+            <input type="text" className="form-input text-sm" placeholder="إلى سورة (اختياري)" value={surahEnd} onChange={e => setSurEnd(e.target.value)} />
+            <input type="number" className="form-input text-sm" placeholder="الآية" value={ayahEnd} onChange={e => setAyahEnd(e.target.value)} />
           </div>
 
-          {/* Pages & Score */}
           <div className="grid grid-cols-2 gap-4">
             <div className="form-group">
-              <label className="form-label">عدد الصفحات</label>
-              <input type="number" step="0.5" min="0" className="form-input" placeholder="2.5" dir="ltr" />
+              <label className="form-label required">عدد الصفحات</label>
+              <input required type="number" step="0.5" className="form-input" placeholder="2.5" value={pagesCount} onChange={e => setPagesCount(e.target.value)} />
             </div>
             <div className="form-group">
-              <label className="form-label">درجة التلاوة (1-10)</label>
-              <div className="star-rating justify-start flex-wrap">
-                {Array.from({ length: 10 }).map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setScore(i + 1)}
-                    className={`star ${i < score ? 'filled' : ''}`}
-                    style={{ fontSize: 22 }}
-                  >
-                    ★
-                  </button>
-                ))}
-                {score > 0 && (
-                  <span className="text-sm font-bold text-gray-500 self-center mr-1">{score}/10</span>
-                )}
-              </div>
+              <label className="form-label">الدرجة (من 10)</label>
+              <select className="form-input form-select font-bold text-amber-600" value={score} onChange={e => setScore(parseInt(e.target.value))}>
+                {[10,9,8,7,6,5,4,3,2,1].map(n => <option key={n} value={n}>{n} / 10</option>)}
+              </select>
             </div>
           </div>
 
-          {/* Tajweed Errors */}
           <div className="form-group">
-            <label className="form-label">أخطاء التجويد (اختر كل ما ينطبق)</label>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {TAJWEED_ERRORS.map((err) => (
-                <button
-                  key={err}
-                  onClick={() => toggleError(err)}
-                  className={`error-chip ${selectedErrors.includes(err) ? 'selected' : ''}`}
-                >
-                  {err}
-                </button>
-              ))}
-            </div>
+            <label className="form-label">ملاحظات المعلم والإدارة</label>
+            <textarea rows={2} className="form-input resize-none" placeholder="اكتب ملاحظات الأداء..." value={teacherNotes} onChange={e => setTeacherNotes(e.target.value)} />
           </div>
 
-          {/* Weekly Goal */}
-          <div className="form-group">
-            <label className="form-label">هل تحقق الهدف الأسبوعي؟</label>
-            <div className="flex gap-3 mt-1">
-              <button
-                onClick={() => setWeeklyGoal(true)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${
-                  weeklyGoal === true
-                    ? 'border-green-500 bg-green-50 text-green-700'
-                    : 'border-gray-100 text-gray-500'
-                }`}
-              >
-                <CheckCircle size={16} />
-                نعم، تحقق
-              </button>
-              <button
-                onClick={() => setWeeklyGoal(false)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl border-2 text-sm font-semibold transition-all ${
-                  weeklyGoal === false
-                    ? 'border-red-400 bg-red-50 text-red-600'
-                    : 'border-gray-100 text-gray-500'
-                }`}
-              >
-                <XCircle size={16} />
-                لا، لم يتحقق
-              </button>
-            </div>
+          <div className="modal-footer pt-4">
+            <button type="button" onClick={onClose} disabled={isLoading} className="btn btn-ghost">إلغاء</button>
+            <button type="submit" disabled={isLoading} className="btn btn-primary">{isLoading ? 'جاري الحفظ...' : 'حفظ السجل'}</button>
           </div>
-
-          {/* Teacher Notes */}
-          <div className="form-group">
-            <label className="form-label">ملاحظات المعلم</label>
-            <textarea
-              rows={3}
-              placeholder="اكتب ملاحظاتك حول أداء الطالب..."
-              className="form-input resize-none"
-            />
-          </div>
-        </div>
-        <div className="modal-footer">
-          <button onClick={onClose} className="btn btn-ghost">إلغاء</button>
-          <button onClick={onClose} className="btn btn-primary">حفظ السجل</button>
-        </div>
+        </form>
       </div>
     </div>
   );

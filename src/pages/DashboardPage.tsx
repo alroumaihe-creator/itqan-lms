@@ -1,8 +1,8 @@
 // ============================================================
-// DASHBOARD PAGE - Main Analytics Overview
+// DASHBOARD PAGE - Main Analytics Overview (Connected to API)
 // ============================================================
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, PieChart, Pie, Cell
@@ -14,14 +14,11 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import {
-  mockDashboardStats, mockRevenueData, mockAttendanceData,
-  mockStudents, mockSessions
+  mockDashboardStats, mockRevenueData, mockAttendanceData, mockSessions
 } from '../data/mockData';
 import { StatusBadge } from '../components/shared/StatusBadge';
 import { Avatar } from '../components/shared/Avatar';
 import { formatCurrency } from '../utils/formatters';
-
-
 
 interface KPICardProps {
   title: string;
@@ -103,11 +100,50 @@ const studentStatusData = [
 
 export const DashboardPage: React.FC<{ onNavigate: (page: string) => void }> = ({ onNavigate }) => {
   const { user } = useAuthStore();
-  const stats = mockDashboardStats;
+  
+  // حالات البيانات الحقيقية
+  const [realStudents, setRealStudents] = useState<any[]>([]);
+  const [realTeachersCount, setRealTeachersCount] = useState(0);
+  const [realCoursesCount, setRealCoursesCount] = useState(0);
 
   const isAdmin = ['SUPER_ADMIN', 'ADMIN'].includes(user?.role || '');
   const isTeacher = user?.role === 'TEACHER';
   const isAccountant = user?.role === 'ACCOUNTANT';
+
+  // جلب البيانات الحقيقية
+  useEffect(() => {
+    const fetchRealData = async () => {
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+        
+        const [studentsRes, teachersRes, coursesRes] = await Promise.all([
+          fetch(`${apiUrl}/students`),
+          fetch(`${apiUrl}/teachers`),
+          fetch(`${apiUrl}/courses`)
+        ]);
+
+        if (studentsRes.ok) {
+          const students = await studentsRes.json();
+          // ترتيب الطلاب من الأحدث للأقدم
+          setRealStudents(students.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        }
+        if (teachersRes.ok) {
+          const teachers = await teachersRes.json();
+          setRealTeachersCount(teachers.length);
+        }
+        if (coursesRes.ok) {
+          const courses = await coursesRes.json();
+          setRealCoursesCount(courses.length);
+        }
+      } catch (error) {
+        console.error("خطأ في جلب بيانات لوحة التحكم:", error);
+      }
+    };
+
+    fetchRealData();
+  }, []);
+
+  const activeStudentsCount = realStudents.filter(s => s.status === 'ACTIVE').length;
 
   return (
     <div className="space-y-6 animate-fadeIn">
@@ -123,16 +159,16 @@ export const DashboardPage: React.FC<{ onNavigate: (page: string) => void }> = (
           </p>
           <div className="mt-4 flex gap-4">
             <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
-              <p className="text-2xl font-black">{stats.sessionsThisWeek}</p>
-              <p className="text-white/70 text-xs">جلسات هذا الأسبوع</p>
+              <p className="text-2xl font-black">{realCoursesCount}</p>
+              <p className="text-white/70 text-xs">مسار تعليمي</p>
             </div>
             <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
-              <p className="text-2xl font-black">{stats.attendanceRate}%</p>
+              <p className="text-2xl font-black">{mockDashboardStats.attendanceRate}%</p>
               <p className="text-white/70 text-xs">معدل الحضور</p>
             </div>
             {!isTeacher && (
               <div className="bg-white/10 rounded-xl px-4 py-2 text-center">
-                <p className="text-2xl font-black">{stats.activeStudents}</p>
+                <p className="text-2xl font-black">{activeStudentsCount}</p>
                 <p className="text-white/70 text-xs">طالب نشط</p>
               </div>
             )}
@@ -144,44 +180,44 @@ export const DashboardPage: React.FC<{ onNavigate: (page: string) => void }> = (
       <div className="grid-kpi">
         <KPICard
           title="إجمالي الطلاب"
-          value={stats.totalStudents}
+          value={realStudents.length}
           change={15}
           icon={GraduationCap}
           color="#1B4F72"
           bgColor="#EFF6FF"
-          subtitle={`${stats.activeStudents} طالب نشط`}
+          subtitle={`${activeStudentsCount} طالب نشط`}
         />
         <KPICard
           title="المعلمون"
-          value={stats.totalTeachers}
+          value={realTeachersCount}
           icon={Users}
           color="#27AE60"
           bgColor="#F0FDF4"
-          subtitle="4 متاحون الآن"
+          subtitle="في قاعدة البيانات"
         />
         <KPICard
           title="الجلسات"
-          value={stats.totalSessions}
+          value={mockDashboardStats.totalSessions}
           change={8}
           icon={Mic2}
           color="#2E86AB"
           bgColor="#EFF6FF"
-          subtitle={`${stats.sessionsThisWeek} هذا الأسبوع`}
+          subtitle={`${mockDashboardStats.sessionsThisWeek} هذا الأسبوع`}
         />
         {(isAdmin || isAccountant) && (
           <KPICard
             title="الإيرادات الشهرية"
-            value={formatCurrency(stats.monthlyRevenue)}
+            value={formatCurrency(mockDashboardStats.monthlyRevenue)}
             change={12}
             icon={DollarSign}
             color="#F39C12"
             bgColor="#FFFBEB"
-            subtitle={`${stats.overdueInvoices} فاتورة متأخرة`}
+            subtitle={`${mockDashboardStats.overdueInvoices} فاتورة متأخرة`}
           />
         )}
         <KPICard
           title="صفحات محفوظة"
-          value={stats.totalPages}
+          value={mockDashboardStats.totalPages}
           change={5}
           icon={BookMarked}
           color="#9B59B6"
@@ -190,7 +226,7 @@ export const DashboardPage: React.FC<{ onNavigate: (page: string) => void }> = (
         />
         <KPICard
           title="الشهادات"
-          value={stats.certificatesIssued}
+          value={mockDashboardStats.certificatesIssued}
           icon={Award}
           color="#E67E22"
           bgColor="#FFF7ED"
@@ -327,10 +363,10 @@ export const DashboardPage: React.FC<{ onNavigate: (page: string) => void }> = (
 
       {/* Bottom Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Students */}
+        {/* Recent Students - Real Data */}
         <div className="card">
           <div className="flex items-center justify-between p-5 border-b border-gray-50">
-            <h3 className="font-bold text-gray-800">آخر الطلاب</h3>
+            <h3 className="font-bold text-gray-800">آخر الطلاب المسجلين</h3>
             <button
               onClick={() => onNavigate('students')}
               className="text-sm text-[#1B4F72] font-semibold hover:underline"
@@ -339,16 +375,20 @@ export const DashboardPage: React.FC<{ onNavigate: (page: string) => void }> = (
             </button>
           </div>
           <div className="divide-y divide-gray-50">
-            {mockStudents.slice(0, 5).map((student) => (
-              <div key={student.id} className="flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors">
-                <Avatar name={student.nameAr} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-gray-800 text-sm">{student.nameAr}</p>
-                  <p className="text-xs text-gray-400">{student.nationality}</p>
+            {realStudents.length === 0 ? (
+              <div className="p-6 text-center text-gray-500 text-sm">لا يوجد طلاب حالياً</div>
+            ) : (
+              realStudents.slice(0, 5).map((student) => (
+                <div key={student.id} className="flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors">
+                  <Avatar name={student.nameAr} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-800 text-sm">{student.nameAr}</p>
+                    <p className="text-xs text-gray-400">{student.nationality || 'غير محدد'}</p>
+                  </div>
+                  <StatusBadge status={student.status} size="sm" />
                 </div>
-                <StatusBadge status={student.status} size="sm" />
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
