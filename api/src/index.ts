@@ -208,6 +208,65 @@ app.delete("/courses/:id", async (req, res) => {
   }
 });
 
+// ==========================================
+// مسارات الاشتراكات (Enrollments)
+// ==========================================
+app.get("/enrollments", async (req, res) => {
+  try {
+    const enrollments = await prisma.enrollment.findMany({
+      include: { 
+        student: true, 
+        course: true, 
+        teacher: true 
+      },
+      orderBy: { enrolledAt: 'desc' }
+    });
+    res.status(200).json(enrollments);
+  } catch (error) {
+    console.error("GET_ENROLLMENTS_ERROR:", error);
+    res.status(500).json({ error: "Failed to fetch enrollments" });
+  }
+});
+
+app.post("/enrollments", async (req, res) => {
+  try {
+    const { studentId, courseId, teacherId } = req.body;
+    
+    // التأكد من عدم وجود اشتراك مسبق لنفس الطالب في نفس الدورة
+    const existingEnrollment = await prisma.enrollment.findFirst({
+      where: { studentId, courseId }
+    });
+
+    if (existingEnrollment) {
+      return res.status(400).json({ error: "الطالب مسجل بالفعل في هذه الدورة" });
+    }
+
+    const newEnrollment = await prisma.enrollment.create({
+      data: { 
+        studentId, 
+        courseId, 
+        teacherId: teacherId || null 
+      },
+      include: { student: true, course: true, teacher: true }
+    });
+    res.status(201).json(newEnrollment);
+  } catch (error) {
+    console.error("POST_ENROLLMENT_ERROR:", error);
+    res.status(500).json({ error: "Failed to create enrollment" });
+  }
+});
+
+app.delete("/enrollments/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.enrollment.delete({ where: { id } });
+    res.status(200).json({ message: "Enrollment deleted successfully" });
+  } catch (error) {
+    console.error("DELETE_ENROLLMENT_ERROR:", error);
+    res.status(500).json({ error: "Failed to delete enrollment" });
+  }
+});
+
 if (process.env.NODE_ENV !== "production") {
   app.listen(8080, () => console.log("Server running on port 8080"));
 }
