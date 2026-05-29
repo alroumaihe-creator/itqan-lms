@@ -13,6 +13,36 @@ app.get("/health", (req, res) => {
 });
 
 // ==========================================
+// مسار تسجيل الدخول (Login API)
+// ==========================================
+app.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await prisma.user.findUnique({ where: { email: email } });
+
+    if (!user) return res.status(404).json({ error: "البريد الإلكتروني غير مسجل لدينا" });
+    if (user.password !== password) return res.status(401).json({ error: "كلمة المرور غير صحيحة" });
+    if (!user.isActive) return res.status(403).json({ error: "هذا الحساب موقوف، يرجى مراجعة الإدارة" });
+
+    let profileName = 'مدير النظام';
+    if (user.role === 'TEACHER') {
+      const teacher = await prisma.teacher.findUnique({ where: { userId: user.id } });
+      if (teacher) profileName = teacher.nameAr;
+    } else if (user.role === 'STUDENT') {
+      const student = await prisma.student.findUnique({ where: { userId: user.id } });
+      if (student) profileName = student.nameAr;
+    }
+
+    res.status(200).json({
+      message: "تم تسجيل الدخول بنجاح",
+      user: { id: user.id, email: user.email, role: user.role, name: profileName }
+    });
+  } catch (error) {
+    res.status(500).json({ error: "حدث خطأ في الخادم أثناء تسجيل الدخول" });
+  }
+});
+
+// ==========================================
 // مسارات الطلاب
 // ==========================================
 app.get("/students", async (req, res) => {
@@ -45,14 +75,11 @@ app.put("/students/:id", async (req, res) => {
     const { nameAr, nameEn, email, nationality, status } = req.body;
     const updatedStudent = await prisma.student.update({
       where: { id: id },
-      data: {
-        nameAr, nameEn, nationality, status,
-        user: { update: { email: email } }
-      }, include: { user: true }
+      data: { nameAr, nameEn, nationality, status, user: { update: { email: email } } },
+      include: { user: true }
     });
     res.status(200).json(updatedStudent);
   } catch (error) {
-    console.error("PUT_STUDENT_ERROR:", error);
     res.status(500).json({ error: "Failed to update student" });
   }
 });
@@ -63,7 +90,6 @@ app.delete("/students/:id", async (req, res) => {
     await prisma.student.delete({ where: { id: id } });
     res.status(200).json({ message: "Student deleted successfully" });
   } catch (error) {
-    console.error("DELETE_STUDENT_ERROR:", error);
     res.status(500).json({ error: "Failed to delete student" });
   }
 });
@@ -125,55 +151,60 @@ app.delete("/teachers/:id", async (req, res) => {
 });
 
 // ==========================================
-// مسار تسجيل الدخول (Login API) المفقود
+// مسارات الدورات (Courses) 
 // ==========================================
-app.post("/login", async (req, res) => {
+app.get("/courses", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const courses = await prisma.course.findMany({ orderBy: { createdAt: 'desc' } });
+    res.status(200).json(courses);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch courses" });
+  }
+});
 
-    // 1. البحث عن المستخدم
-    const user = await prisma.user.findUnique({
-      where: { email: email }
-    });
-
-    if (!user) {
-      return res.status(404).json({ error: "البريد الإلكتروني غير مسجل لدينا" });
-    }
-
-    // 2. التحقق من كلمة المرور
-    if (user.password !== password) {
-      return res.status(401).json({ error: "كلمة المرور غير صحيحة" });
-    }
-
-    // 3. التحقق من حالة الحساب
-    if (!user.isActive) {
-      return res.status(403).json({ error: "هذا الحساب موقوف، يرجى مراجعة الإدارة" });
-    }
-
-    // 4. جلب الاسم حسب الدور (طالب أو معلم)
-    let profileName = 'مدير النظام';
-    if (user.role === 'TEACHER') {
-      const teacher = await prisma.teacher.findUnique({ where: { userId: user.id } });
-      if (teacher) profileName = teacher.nameAr;
-    } else if (user.role === 'STUDENT') {
-      const student = await prisma.student.findUnique({ where: { userId: user.id } });
-      if (student) profileName = student.nameAr;
-    }
-
-    // 5. إرسال بيانات الدخول بنجاح
-    res.status(200).json({
-      message: "تم تسجيل الدخول بنجاح",
-      user: {
-        id: user.id,
-        email: user.email,
-        role: user.role,
-        name: profileName
+app.post("/courses", async (req, res) => {
+  try {
+    const { nameAr, nameEn, type, level, price, isActive } = req.body;
+    const newCourse = await prisma.course.create({
+      data: {
+        nameAr, nameEn, type,
+        level: parseInt(level) || 1,
+        price: price ? parseFloat(price) : null,
+        isActive: isActive !== undefined ? isActive : true
       }
     });
-
+    res.status(201).json(newCourse);
   } catch (error) {
-    console.error("LOGIN_ERROR:", error);
-    res.status(500).json({ error: "حدث خطأ في الخادم أثناء تسجيل الدخول" });
+    res.status(500).json({ error: "Failed to create course" });
+  }
+});
+
+app.put("/courses/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nameAr, nameEn, type, level, price, isActive } = req.body;
+    const updatedCourse = await prisma.course.update({
+      where: { id },
+      data: {
+        nameAr, nameEn, type,
+        level: parseInt(level) || 1,
+        price: price ? parseFloat(price) : null,
+        isActive
+      }
+    });
+    res.status(200).json(updatedCourse);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update course" });
+  }
+});
+
+app.delete("/courses/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await prisma.course.delete({ where: { id } });
+    res.status(200).json({ message: "Course deleted successfully" });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to delete course" });
   }
 });
 
