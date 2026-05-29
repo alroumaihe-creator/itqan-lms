@@ -1,17 +1,18 @@
 // ============================================================
-// LOGIN PAGE - Arabic First UI
+// LOGIN PAGE - Arabic First UI (Connected to API)
 // ============================================================
 
 import React, { useState } from 'react';
 import { Eye, EyeOff, Lock, Mail, AlertCircle, BookOpen } from 'lucide-react';
-import { useAuthStore, TEST_ACCOUNTS } from '../stores/authStore';
+import { useAuthStore } from '../stores/authStore'; // تمت إزالة TEST_ACCOUNTS
 import type { Role } from '../types';
 
+// قمنا بتوحيد كلمات المرور إلى 123456 لتطابق قاعدة البيانات الحقيقية
 const DEMO_ACCOUNTS = [
-  { label: 'مدير عام', email: 'admin@academy.com', password: 'Admin@123', role: 'SUPER_ADMIN' as Role, color: '#1B4F72' },
-  { label: 'معلم', email: 'teacher@academy.com', password: 'Teacher@123', role: 'TEACHER' as Role, color: '#27AE60' },
-  { label: 'ولي أمر', email: 'parent@academy.com', password: 'Parent@123', role: 'PARENT' as Role, color: '#9B59B6' },
-  { label: 'محاسب', email: 'accountant@academy.com', password: 'Account@123', role: 'ACCOUNTANT' as Role, color: '#E67E22' },
+  { label: 'مدير عام', email: 'admin@academy.com', password: '123456', role: 'SUPER_ADMIN' as Role, color: '#1B4F72' },
+  { label: 'معلم', email: 'teacher@academy.com', password: '123456', role: 'TEACHER' as Role, color: '#27AE60' },
+  { label: 'ولي أمر', email: 'parent@academy.com', password: '123456', role: 'PARENT' as Role, color: '#9B59B6' },
+  { label: 'طالب', email: 'student@academy.com', password: '123456', role: 'STUDENT' as Role, color: '#E67E22' }, // غيّرناها لطالب لسهولة الاختبار
 ];
 
 interface LoginPageProps {
@@ -26,31 +27,42 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [error, setError] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
 
+  // دالة إرسال البيانات للسيرفر الحقيقي
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const response = await fetch(`${apiUrl}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
 
-    const account = TEST_ACCOUNTS.find(
-      (a) => a.email === email && a.password === password
-    );
+      const data = await response.json();
 
-    if (account) {
+      if (!response.ok) {
+        throw new Error(data.error || 'البريد الإلكتروني أو كلمة المرور غير صحيحة');
+      }
+
+      // تسجيل الدخول بنجاح عبر Zustand Store
       login(
         {
-          id: account.id,
-          email: account.email,
-          role: account.role,
-          nameAr: account.nameAr,
+          id: data.user.id,
+          email: data.user.email,
+          role: data.user.role,
+          nameAr: data.user.name,
         },
-        'mock-jwt-token-' + account.id
+        'token-' + data.user.id // مؤقتاً حتى نبرمج توثيق JWT الحقيقي
       );
-      setLoading(false);
-      onLogin();
-    } else {
-      setError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
+      
+      onLogin(); // إخفاء صفحة الدخول وعرض لوحة التحكم
+
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
       setLoading(false);
     }
   };
@@ -158,7 +170,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               className="btn btn-primary w-full py-3 text-base mt-2"
             >
               {isLoading ? (
-                <span className="flex items-center gap-2">
+                <span className="flex items-center justify-center gap-2">
                   <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   جاري تسجيل الدخول...
                 </span>

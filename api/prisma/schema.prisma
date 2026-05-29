@@ -29,6 +29,7 @@ enum StudentStatus {
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
+  password  String?  @default("123456") // أضف هذا السطر
   role      Role     @default(STUDENT)
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
