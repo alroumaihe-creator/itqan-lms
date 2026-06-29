@@ -29,12 +29,13 @@ app.post("/login", async (req, res) => {
       if (student) profileName = student.nameAr;
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "تم تسجيل الدخول بنجاح",
       user: { id: user.id, email: user.email, role: user.role, name: profileName }
     });
   } catch (error: any) {
-    res.status(500).json({ error: "حدث خطأ في الخادم" });
+    console.error("LOGIN_ERROR:", error);
+    return res.status(500).json({ error: "حدث خطأ في الخادم" });
   }
 });
 
@@ -186,8 +187,16 @@ app.post("/enrollments", async (req, res) => {
     const { studentId, courseId, teacherId } = req.body;
     const existing = await prisma.enrollment.findFirst({ where: { studentId, courseId } });
     if (existing) return res.status(400).json({ error: "الطالب مسجل بالفعل" });
-    res.status(201).json(await prisma.enrollment.create({ data: { studentId, courseId, teacherId: teacherId || null }, include: { student: true, course: true, teacher: true } }));
-  } catch (error: any) { res.status(500).json({ error: "Failed" }); }
+    
+    const enrollment = await prisma.enrollment.create({ 
+        data: { studentId, courseId, teacherId: teacherId || null }, 
+        include: { student: true, course: true, teacher: true } 
+    });
+    return res.status(201).json(enrollment);
+  } catch (error: any) { 
+    console.error(error); 
+    return res.status(500).json({ error: "Failed" }); 
+  }
 });
 
 app.delete("/enrollments/:id", async (req, res) => {
