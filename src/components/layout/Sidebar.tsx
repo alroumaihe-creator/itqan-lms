@@ -1,13 +1,12 @@
 // ============================================================
-// SIDEBAR COMPONENT - RTL Navigation
+// SIDEBAR COMPONENT - Etqan Academy (Premium & Responsive)
 // ============================================================
 
 import React from 'react';
 import {
-  LayoutDashboard, Users, GraduationCap, BookOpen, Calendar,
-  ClipboardList, BookMarked, CreditCard, FileText, Library,
-  Award, Bell, BarChart3, Settings, LogOut, ChevronRight,
-  ChevronLeft, Users2, Mic2, Scroll
+  LayoutDashboard, Users, GraduationCap, BookOpen,
+  CreditCard, Settings, LogOut, Bell, Library, Award, Mic2, FileText,
+  ChevronRight, ChevronLeft, Users2
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -19,104 +18,22 @@ interface NavItem {
   icon: React.ComponentType<{ size?: number; className?: string }>;
   badge?: number;
   roles?: Role[];
-  children?: Omit<NavItem, 'children'>[];
 }
 
+// 💡 تم ترتيب الصلاحيات وإلغاء القوائم الفرعية للاعتماد على التبويبات الداخلية
 const NAV_ITEMS: NavItem[] = [
-  {
-    id: 'dashboard',
-    label: 'لوحة التحكم',
-    icon: LayoutDashboard,
-  },
-  {
-    id: 'students',
-    label: 'الطلاب',
-    icon: GraduationCap,
-    badge: 10,
-    roles: ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'TEACHER'],
-  },
-  {
-    id: 'teachers',
-    label: 'المعلمون',
-    icon: Users,
-    roles: ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR'],
-  },
-  {
-    id: 'parents',
-    label: 'أولياء الأمور',
-    icon: Users2,
-    roles: ['SUPER_ADMIN', 'ADMIN'],
-  },
-  {
-    id: 'courses',
-    label: 'الدورات',
-    icon: BookOpen,
-  },
-  {
-    id: 'sessions',
-    label: 'الجلسات',
-    icon: Mic2,
-    badge: 3,
-  },
-  {
-    id: 'schedule',
-    label: 'الجدول',
-    icon: Calendar,
-  },
-  {
-    id: 'attendance',
-    label: 'الحضور',
-    icon: ClipboardList,
-  },
-  {
-    id: 'quran-tracking',
-    label: 'تتبع القرآن',
-    icon: BookMarked,
-  },
-  {
-    id: 'exams',
-    label: 'الاختبارات',
-    icon: Scroll,
-  },
-  {
-    id: 'finance',
-    label: 'المالية',
-    icon: CreditCard,
-    roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
-    children: [
-      { id: 'finance-invoices', label: 'الفواتير', icon: FileText },
-      { id: 'finance-payments', label: 'المدفوعات', icon: CreditCard },
-      { id: 'finance-subscriptions', label: 'الاشتراكات', icon: Scroll },
-    ],
-  },
-  {
-    id: 'library',
-    label: 'المكتبة',
-    icon: Library,
-  },
-  {
-    id: 'certificates',
-    label: 'الشهادات',
-    icon: Award,
-  },
-  {
-    id: 'notifications',
-    label: 'الإشعارات',
-    icon: Bell,
-    badge: 3,
-  },
-  {
-    id: 'reports',
-    label: 'التقارير',
-    icon: BarChart3,
-    roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'],
-  },
-  {
-    id: 'settings',
-    label: 'الإعدادات',
-    icon: Settings,
-    roles: ['SUPER_ADMIN', 'ADMIN'],
-  },
+  { id: 'dashboard', label: 'لوحة التحكم', icon: LayoutDashboard, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'PARENT'] },
+  { id: 'students', label: 'الطلاب', icon: GraduationCap, roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { id: 'teachers', label: 'المعلمون', icon: Users, roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { id: 'parents', label: 'أولياء الأمور', icon: Users2, roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { id: 'courses', label: 'المسارات والدورات', icon: BookOpen, roles: ['SUPER_ADMIN', 'ADMIN'] },
+  { id: 'sessions', label: 'إدارة الجلسات', icon: Mic2, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
+  { id: 'finance', label: 'المالية', icon: CreditCard, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
+  { id: 'library', label: 'المكتبة', icon: Library, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT'] },
+  { id: 'certificates', label: 'الشهادات', icon: Award, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER'] },
+  { id: 'notifications', label: 'الإشعارات', icon: Bell, roles: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STUDENT', 'PARENT'] },
+  { id: 'reports', label: 'التقارير', icon: FileText, roles: ['SUPER_ADMIN', 'ADMIN', 'ACCOUNTANT'] },
+  { id: 'settings', label: 'الإعدادات', icon: Settings, roles: ['SUPER_ADMIN', 'ADMIN'] },
 ];
 
 interface SidebarProps {
@@ -127,167 +44,139 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => {
   const { user, logout } = useAuthStore();
   const { sidebarCollapsed, sidebarOpen, toggleSidebar, setSidebarOpen } = useUIStore();
-  const [expandedItems, setExpandedItems] = React.useState<string[]>(['finance']);
 
-  const isCollapsed = sidebarCollapsed;
-
+  // التحقق من الصلاحيات لظهور القوائم
   const canAccess = (roles?: Role[]): boolean => {
     if (!roles || roles.length === 0) return true;
     if (!user) return false;
     return roles.includes(user.role);
   };
 
-  const toggleExpanded = (id: string) => {
-    setExpandedItems((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-  };
-
   const handleNavigate = (page: string) => {
     onNavigate(page);
-    setSidebarOpen(false);
+    // إغلاق القائمة في الموبايل بعد اختيار صفحة
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
   };
 
   const filteredItems = NAV_ITEMS.filter((item) => canAccess(item.roles));
 
   return (
     <>
-      {/* Mobile overlay */}
+      {/* 📱 Mobile Overlay (الخلفية الشفافة للموبايل) */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          className="fixed inset-0 bg-[#0A192F]/60 backdrop-blur-sm z-40 md:hidden animate-fadeIn"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
+      {/* 🖥️ Sidebar Container */}
       <aside
         className={`
           fixed top-0 right-0 h-full z-50
           flex flex-col
           transition-all duration-300 ease-in-out
-          sidebar
-          ${sidebarOpen ? 'open' : ''}
-          ${isCollapsed ? 'collapsed' : ''}
+          bg-gradient-to-b from-[#0A192F] to-[#1B4F72] text-white shadow-2xl
+          ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'} 
+          md:translate-x-0
+          ${sidebarCollapsed ? 'md:w-20' : 'md:w-64'}
+          w-64
         `}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-white/10">
-          {!isCollapsed && (
-            <div className="flex items-center gap-3 animate-fadeIn">
-              <div className="w-9 h-9 rounded-xl bg-[#F39C12] flex items-center justify-center text-white font-bold text-base">
-                ن
-              </div>
-              <div>
-                <h1 className="text-white font-bold text-sm leading-tight">أكاديمية النور</h1>
-                <p className="text-white/60 text-xs">نظام الإدارة</p>
-              </div>
+        {/* 🌟 Header Section (Logo & Toggle) */}
+        <div className="flex items-center justify-between p-4 border-b border-white/10 h-20">
+          <div className="flex items-center gap-3 overflow-hidden">
+            {/* الشعار المصغر */}
+            <div className="flex-shrink-0 bg-white/10 p-1.5 rounded-xl">
+              <img 
+                src="/etqan-logo.png" 
+                alt="إتقان" 
+                className="w-8 h-8 object-contain drop-shadow-md"
+                onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/32?text=E'; }}
+              />
             </div>
-          )}
-          {isCollapsed && (
-            <div className="w-9 h-9 rounded-xl bg-[#F39C12] flex items-center justify-center text-white font-bold mx-auto">
-              ن
-            </div>
-          )}
+            
+            {/* النص يظهر فقط إذا لم تكن القائمة مطوية */}
+            {!sidebarCollapsed && (
+              <div className="animate-fadeIn whitespace-nowrap">
+                <h1 className="text-white font-black text-sm tracking-wide">أكاديمية إتقان</h1>
+                <p className="text-[#F39C12] text-[10px] font-bold">نظام الإدارة</p>
+              </div>
+            )}
+          </div>
+
+          {/* 🔘 زر الطي والفرد (Desktop Only) */}
           <button
             onClick={toggleSidebar}
-            className="text-white/60 hover:text-white hover:bg-white/10 rounded-lg p-1.5 transition-all flex-shrink-0 hidden md:flex"
+            className="text-white/50 hover:text-white hover:bg-white/10 rounded-lg p-1.5 transition-all hidden md:flex flex-shrink-0"
           >
-            {isCollapsed ? (
-              <ChevronLeft size={16} />
-            ) : (
-              <ChevronRight size={16} />
-            )}
+            {sidebarCollapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
           </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto sidebar-scroll p-3 space-y-0.5">
+        {/* 🧭 Navigation Menu */}
+        <nav className="flex-1 overflow-y-auto hide-scrollbar p-3 space-y-1">
           {filteredItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentPage === item.id;
-            const hasChildren = item.children && item.children.length > 0;
-            const isExpanded = expandedItems.includes(item.id);
-            const isChildActive = item.children?.some(
-              (child) => currentPage === child.id
-            );
 
             return (
-              <div key={item.id}>
-                <button
-                  onClick={() => {
-                    if (hasChildren) {
-                      if (!isCollapsed) toggleExpanded(item.id);
-                    } else {
-                      handleNavigate(item.id);
-                    }
-                  }}
-                  className={`nav-item w-full ${isActive || isChildActive ? 'active' : ''}`}
-                >
-                  <Icon size={20} className="nav-icon flex-shrink-0" />
-                  {!isCollapsed && (
-                    <>
-                      <span className="flex-1 text-right">{item.label}</span>
-                      {item.badge !== undefined && (
-                        <span className="nav-badge">{item.badge}</span>
-                      )}
-                      {hasChildren && (
-                        <ChevronLeft
-                          size={14}
-                          className={`transition-transform ${isExpanded ? '-rotate-90' : ''}`}
-                        />
-                      )}
-                    </>
-                  )}
-                  {isCollapsed && item.badge !== undefined && (
-                    <span className="absolute top-0 left-0 w-4 h-4 bg-[#F39C12] text-white text-[10px] rounded-full flex items-center justify-center font-bold">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-
-                {/* Children */}
-                {hasChildren && isExpanded && !isCollapsed && (
-                  <div className="mt-1 mr-4 space-y-0.5 border-r border-white/10 pr-3">
-                    {item.children!.map((child) => {
-                      const ChildIcon = child.icon;
-                      const isChildCurrent = currentPage === child.id;
-                      return (
-                        <button
-                          key={child.id}
-                          onClick={() => handleNavigate(child.id)}
-                          className={`nav-item w-full text-sm py-2 ${isChildCurrent ? 'active' : ''}`}
-                        >
-                          <ChildIcon size={16} className="nav-icon" />
-                          <span className="flex-1 text-right">{child.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
+              <button
+                key={item.id}
+                onClick={() => handleNavigate(item.id)}
+                className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all group relative ${
+                  isActive 
+                    ? 'bg-gradient-to-r from-[#F39C12] to-[#D68910] text-white font-bold shadow-lg shadow-orange-900/20' 
+                    : 'text-blue-100 hover:bg-white/10 hover:text-white'
+                } ${sidebarCollapsed ? 'justify-center md:px-0' : ''}`}
+                title={sidebarCollapsed ? item.label : undefined}
+              >
+                <Icon size={20} className={`flex-shrink-0 transition-transform ${isActive ? 'scale-110' : 'group-hover:scale-110'}`} />
+                
+                {!sidebarCollapsed && (
+                  <span className="flex-1 text-right whitespace-nowrap animate-fadeIn">{item.label}</span>
                 )}
-              </div>
+
+                {/* Badge Notification */}
+                {item.badge !== undefined && (
+                  <span className={`
+                    flex items-center justify-center font-bold
+                    ${sidebarCollapsed 
+                      ? 'absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[10px] rounded-full shadow-sm' 
+                      : 'bg-white/20 text-white text-xs px-2 py-0.5 rounded-full'
+                    }
+                  `}>
+                    {item.badge}
+                  </span>
+                )}
+              </button>
             );
           })}
         </nav>
 
-        {/* User section */}
-        <div className="p-3 border-t border-white/10">
-          {!isCollapsed && user && (
-            <div className="flex items-center gap-3 px-3 py-2 rounded-xl mb-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#F39C12] to-[#E67E22] flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+        {/* 👤 User Footer Section */}
+        <div className="p-3 border-t border-white/10 bg-black/10">
+          {!sidebarCollapsed && user && (
+            <div className="flex items-center gap-3 px-3 py-2 rounded-xl mb-3 animate-fadeIn">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#F39C12] to-[#D68910] flex items-center justify-center text-white font-bold text-sm shadow-md flex-shrink-0">
                 {user.nameAr.charAt(0)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-white text-xs font-semibold truncate">{user.nameAr}</p>
-                <p className="text-white/50 text-[11px] truncate">{user.email}</p>
+                <p className="text-white text-xs font-bold truncate">{user.nameAr}</p>
+                <p className="text-white/50 text-[10px] truncate">{user.email}</p>
               </div>
             </div>
           )}
+          
           <button
             onClick={logout}
-            className="nav-item w-full text-red-300 hover:text-red-200 hover:bg-red-500/20"
+            className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all text-red-300 hover:text-red-100 hover:bg-red-500/20 group ${sidebarCollapsed ? 'justify-center md:px-0' : ''}`}
+            title={sidebarCollapsed ? 'تسجيل الخروج' : undefined}
           >
-            <LogOut size={18} className="nav-icon" />
-            {!isCollapsed && <span className="flex-1 text-right">تسجيل الخروج</span>}
+            <LogOut size={18} className="flex-shrink-0 group-hover:-translate-x-1 transition-transform" />
+            {!sidebarCollapsed && <span className="flex-1 text-right font-semibold whitespace-nowrap animate-fadeIn">تسجيل الخروج</span>}
           </button>
         </div>
       </aside>

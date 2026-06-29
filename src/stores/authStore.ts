@@ -1,100 +1,47 @@
 // ============================================================
-// AUTH STORE - Zustand State Management
+// AUTH STORE - Authentication & Role Management
 // ============================================================
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import type { Role } from '../types';
-
-export interface AuthUser {
-  id: string;
-  email: string;
-  role: Role;
-  nameAr: string;
-  nameEn?: string;
-  profileImageUrl?: string;
-}
 
 interface AuthState {
-  user: AuthUser | null;
-  token: string | null;
   isAuthenticated: boolean;
-  isLoading: boolean;
-  
-  // Actions
-  login: (user: AuthUser, token: string) => void;
+  user: any | null;
+  login: (email: string, password?: string) => Promise<void>;
   logout: () => void;
-  updateUser: (user: Partial<AuthUser>) => void;
-  setLoading: (loading: boolean) => void;
 }
 
-/**
- * Authentication store with persistence
- * Handles user session, token management, and auth state
- */
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      user: null,
-      token: null,
-      isAuthenticated: false,
-      isLoading: false,
+export const useAuthStore = create<AuthState>((set) => ({
+  isAuthenticated: false,
+  user: null,
+  login: async (email, password) => {
+    // محاكاة تأخير الاتصال بالسيرفر
+    await new Promise(resolve => setTimeout(resolve, 800));
 
-      login: (user, token) => {
-        set({ user, token, isAuthenticated: true, isLoading: false });
-      },
+    let role = 'STUDENT';
+    let name = 'طالب تجريبي';
 
-      logout: () => {
-        set({ user: null, token: null, isAuthenticated: false });
-      },
-
-      updateUser: (updates) => {
-        set((state) => ({
-          user: state.user ? { ...state.user, ...updates } : null,
-        }));
-      },
-
-      setLoading: (loading) => set({ isLoading: loading }),
-    }),
-    {
-      name: 'academy-auth',
-      partialize: (state) => ({
-        user: state.user,
-        token: state.token,
-        isAuthenticated: state.isAuthenticated,
-      }),
+    // 💡 التحقق الذكي من الصلاحيات بناءً على الإيميل
+    if (email.includes('admin')) {
+      role = 'SUPER_ADMIN';
+      name = 'مدير النظام';
+    } else if (email.includes('teacher')) {
+      role = 'TEACHER';
+      name = 'معلم تجريبي';
+    } else if (email.includes('parent')) {
+      role = 'PARENT';
+      name = 'ولي أمر';
     }
-  )
-);
 
-// Test accounts for demo
-export const TEST_ACCOUNTS = [
-  {
-    email: 'admin@academy.com',
-    password: 'Admin@123',
-    role: 'SUPER_ADMIN' as Role,
-    nameAr: 'أحمد المدير العام',
-    id: 'user-admin-1',
+    set({
+      isAuthenticated: true,
+      user: {
+        id: '1',
+        nameAr: name,
+        email: email,
+        role: role,
+      },
+    });
   },
-  {
-    email: 'teacher@academy.com',
-    password: 'Teacher@123',
-    role: 'TEACHER' as Role,
-    nameAr: 'الشيخ أحمد محمد العلي',
-    id: 'user-teacher-1',
-  },
-  {
-    email: 'parent@academy.com',
-    password: 'Parent@123',
-    role: 'PARENT' as Role,
-    nameAr: 'محمد علي السعيد',
-    id: 'user-parent-1',
-  },
-  {
-    email: 'accountant@academy.com',
-    password: 'Account@123',
-    role: 'ACCOUNTANT' as Role,
-    nameAr: 'سارة المحاسبة',
-    id: 'user-accountant-1',
-  },
-];
+  logout: () => set({ isAuthenticated: false, user: null }),
+}));

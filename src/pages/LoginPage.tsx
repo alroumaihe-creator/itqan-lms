@@ -1,212 +1,154 @@
 // ============================================================
-// LOGIN PAGE - Arabic First UI (Connected to API)
+// LOGIN PAGE - Etqan Academy (Premium UI)
 // ============================================================
 
 import React, { useState } from 'react';
-import { Eye, EyeOff, Lock, Mail, AlertCircle, BookOpen } from 'lucide-react';
-import { useAuthStore } from '../stores/authStore'; // تمت إزالة TEST_ACCOUNTS
-import type { Role } from '../types';
-
-// قمنا بتوحيد كلمات المرور إلى 123456 لتطابق قاعدة البيانات الحقيقية
-const DEMO_ACCOUNTS = [
-  { label: 'مدير عام', email: 'admin@academy.com', password: '123456', role: 'SUPER_ADMIN' as Role, color: '#1B4F72' },
-  { label: 'معلم', email: 'teacher@academy.com', password: '123456', role: 'TEACHER' as Role, color: '#27AE60' },
-  { label: 'ولي أمر', email: 'parent@academy.com', password: '123456', role: 'PARENT' as Role, color: '#9B59B6' },
-  { label: 'طالب', email: 'student@academy.com', password: '123456', role: 'STUDENT' as Role, color: '#E67E22' }, // غيّرناها لطالب لسهولة الاختبار
-];
+import { Mail, Lock, Eye, EyeOff, ArrowLeft, Loader2 } from 'lucide-react';
+import { useAuthStore } from '../stores/authStore';
 
 interface LoginPageProps {
   onLogin: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
-  const { login, isLoading, setLoading } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+  const login = useAuthStore((state) => state.login);
 
-  // دالة إرسال البيانات للسيرفر الحقيقي
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
     setError('');
-    setLoading(true);
 
     try {
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
-      const response = await fetch(`${apiUrl}/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'البريد الإلكتروني أو كلمة المرور غير صحيحة');
-      }
-
-      // تسجيل الدخول بنجاح عبر Zustand Store
-      login(
-        {
-          id: data.user.id,
-          email: data.user.email,
-          role: data.user.role,
-          nameAr: data.user.name,
-        },
-        'token-' + data.user.id // مؤقتاً حتى نبرمج توثيق JWT الحقيقي
-      );
-      
-      onLogin(); // إخفاء صفحة الدخول وعرض لوحة التحكم
-
-    } catch (err: any) {
-      setError(err.message);
+      // محاكاة الاتصال بالسيرفر
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await login(email, password);
+      onLogin();
+    } catch (err) {
+      setError('البريد الإلكتروني أو كلمة المرور غير صحيحة');
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const quickLogin = (account: typeof DEMO_ACCOUNTS[0]) => {
-    setEmail(account.email);
-    setPassword(account.password);
-    setError('');
-  };
-
   return (
-    <div className="min-h-screen login-bg islamic-pattern flex items-center justify-center p-4" dir="rtl">
-      {/* Background decorations */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-100px] right-[-100px] w-[400px] h-[400px] rounded-full bg-white/5 blur-3xl" />
-        <div className="absolute bottom-[-100px] left-[-100px] w-[400px] h-[400px] rounded-full bg-[#F39C12]/10 blur-3xl" />
-      </div>
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" dir="rtl" style={{ background: 'linear-gradient(135deg, #0A192F 0%, #1B4F72 100%)' }}>
+      
+      {/* 🌟 تأثيرات الإضاءة الخلفية (Glowing Orbs) 🌟 */}
+      <div className="absolute top-[-10%] right-[-5%] w-[400px] h-[400px] rounded-full bg-[#1B4F72] blur-[120px] opacity-60 animate-pulse"></div>
+      <div className="absolute bottom-[-10%] left-[-5%] w-[300px] h-[300px] rounded-full bg-[#F39C12] blur-[150px] opacity-20"></div>
 
-      <div className="w-full max-w-md relative">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-white/10 backdrop-blur-sm border border-white/20 mb-4 mx-auto">
-            <BookOpen size={36} className="text-[#F39C12]" />
+      <div className="w-full max-w-md px-6 relative z-10 animate-slideUp">
+        {/* 🌟 بطاقة تسجيل الدخول (Glassmorphism & Premium Card) 🌟 */}
+        <div className="bg-white/95 backdrop-blur-md rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.3)] border border-white/20 p-10">
+          
+          <div className="text-center mb-8">
+            {/* الشعار الجديد */}
+            <div className="mb-6 relative inline-block">
+              <img 
+                src="/etqan-logo.png" 
+                alt="أكاديمية إتقان" 
+                className="w-36 h-auto mx-auto object-contain drop-shadow-md hover:scale-105 transition-transform duration-300"
+                onError={(e) => {
+                  // في حال لم يجد الصورة، يضع مربعاً بديلاً مؤقتاً
+                  (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=Logo';
+                }}
+              />
+            </div>
+            <h1 className="text-3xl font-black text-[#1B4F72] mb-2 tracking-tight">أكاديمية إتقان</h1>
+            <p className="text-[#F39C12] font-bold text-sm tracking-wide">علمٌ يُتْقَن.. أثَرٌ يَبقى</p>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-1">أكاديمية النور</h1>
-          <p className="text-white/60 text-sm">للقرآن الكريم والتعليم الإسلامي</p>
-        </div>
-
-        {/* Login Card */}
-        <div className="bg-white rounded-3xl p-8 shadow-2xl animate-bounceIn">
-          <h2 className="text-2xl font-bold text-[#2C3E50] mb-1">مرحباً بك 👋</h2>
-          <p className="text-gray-400 text-sm mb-6">قم بتسجيل الدخول للوصول إلى النظام</p>
 
           {error && (
-            <div className="flex items-center gap-3 bg-red-50 border border-red-100 text-red-600 rounded-xl p-3 mb-5 animate-fadeIn">
-              <AlertCircle size={18} className="flex-shrink-0" />
-              <p className="text-sm font-medium">{error}</p>
+            <div className="bg-red-50 text-red-500 text-sm font-bold p-4 rounded-xl mb-6 flex items-center gap-2 border border-red-100 animate-fadeIn">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+              {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {/* Email */}
-            <div className="form-group">
-              <label className="form-label required">البريد الإلكتروني</label>
-              <div className="relative">
-                <Mail size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-[#1B4F72] transition-colors">
+                  <Mail size={20} />
+                </div>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="example@academy.com"
-                  className="form-input pr-10"
+                  className="w-full bg-gray-50 border-2 border-gray-100 text-gray-800 rounded-xl pr-12 pl-4 py-3.5 focus:outline-none focus:border-[#1B4F72] focus:bg-white transition-all text-sm font-medium"
+                  placeholder="name@etqan.com"
                   dir="ltr"
                   required
-                  autoComplete="email"
                 />
               </div>
             </div>
 
-            {/* Password */}
-            <div className="form-group">
-              <label className="form-label required">كلمة المرور</label>
-              <div className="relative">
-                <Lock size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">كلمة المرور</label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-gray-400 group-focus-within:text-[#1B4F72] transition-colors">
+                  <Lock size={20} />
+                </div>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  className="w-full bg-gray-50 border-2 border-gray-100 text-gray-800 rounded-xl pr-12 pl-12 py-3.5 focus:outline-none focus:border-[#1B4F72] focus:bg-white transition-all text-sm font-medium"
                   placeholder="••••••••"
-                  className="form-input pr-10 pl-10"
                   dir="ltr"
                   required
-                  autoComplete="current-password"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 left-0 pl-4 flex items-center text-gray-400 hover:text-[#1B4F72] transition-colors"
                 >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                 </button>
               </div>
             </div>
 
-            {/* Remember me & Forgot password */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="rounded border-gray-300 text-[#1B4F72] w-4 h-4"
-                />
-                <span className="text-sm text-gray-600">تذكرني</span>
+            <div className="flex items-center justify-between pt-2">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-[#1B4F72] focus:ring-[#1B4F72] transition-colors" />
+                <span className="text-sm font-medium text-gray-600 group-hover:text-gray-900 transition-colors">تذكرني</span>
               </label>
-              <button type="button" className="text-sm text-[#1B4F72] hover:underline font-medium">
+              <a href="#" className="text-sm font-bold text-[#F39C12] hover:text-[#D68910] transition-colors">
                 نسيت كلمة المرور؟
-              </button>
+              </a>
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
-              disabled={isLoading}
-              className="btn btn-primary w-full py-3 text-base mt-2"
+              disabled={isLoading || !email || !password}
+              className="w-full bg-gradient-to-r from-[#1B4F72] to-[#2E86AB] hover:from-[#153A54] hover:to-[#1B4F72] text-white font-bold rounded-xl py-4 flex items-center justify-center gap-2 transition-all transform hover:-translate-y-0.5 shadow-lg shadow-blue-900/20 disabled:opacity-70 disabled:cursor-not-allowed disabled:transform-none mt-2"
             >
               {isLoading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <>
+                  <Loader2 size={20} className="animate-spin" />
                   جاري تسجيل الدخول...
-                </span>
+                </>
               ) : (
-                'تسجيل الدخول'
+                <>
+                  تسجيل الدخول
+                  <ArrowLeft size={20} />
+                </>
               )}
             </button>
           </form>
-
-          {/* Demo accounts */}
-          <div className="mt-6 pt-5 border-t border-gray-100">
-            <p className="text-xs text-gray-400 text-center mb-3 font-medium">حسابات تجريبية سريعة</p>
-            <div className="grid grid-cols-2 gap-2">
-              {DEMO_ACCOUNTS.map((account) => (
-                <button
-                  key={account.role}
-                  onClick={() => quickLogin(account)}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-gray-100 hover:border-gray-200 hover:bg-gray-50 transition-all text-sm text-right"
-                >
-                  <div
-                    className="w-6 h-6 rounded-lg flex items-center justify-center text-white text-xs font-bold flex-shrink-0"
-                    style={{ backgroundColor: account.color }}
-                  >
-                    {account.label[0]}
-                  </div>
-                  <span className="text-gray-600 font-medium text-xs">{account.label}</span>
-                </button>
-              ))}
-            </div>
+          
+          <div className="mt-8 text-center border-t border-gray-100 pt-6">
+            <p className="text-xs text-gray-400 font-medium">
+              © {new Date().getFullYear()} أكاديمية إتقان - جميع الحقوق محفوظة
+            </p>
           </div>
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-white/40 text-xs mt-6">
-          © 2024 أكاديمية النور - جميع الحقوق محفوظة
-        </p>
       </div>
     </div>
   );

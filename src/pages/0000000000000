@@ -7,7 +7,7 @@ import {
   ArrowRight, Edit, BookMarked, GraduationCap,
   Calendar, CreditCard, FileText, MessageSquare, MapPin, Clock,
   CheckCircle, XCircle, AlertCircle, Award, Download, Trash2,
-  Calculator, MessageCircle, TrendingUp
+  Calculator, MessageCircle // تم إضافة أيقونات جديدة
 } from 'lucide-react';
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
@@ -31,7 +31,7 @@ import { StudentFormModal } from '../components/students/StudentFormModal';
 const TABS = [
   { id: 'overview', label: 'نظرة عامة', icon: GraduationCap },
   { id: 'quran', label: 'تتبع القرآن', icon: BookMarked },
-  { id: 'academic', label: 'الأكاديمي', icon: TrendingUp },
+  { id: 'academic', label: 'الأكاديمي', icon: TrendingUp: null }, // سنعوضها أدناه لمنع الأخطاء
   { id: 'attendance', label: 'الحضور', icon: Calendar },
   { id: 'finance', label: 'المالية', icon: CreditCard },
   { id: 'documents', label: 'الوثائق', icon: FileText },
@@ -49,7 +49,7 @@ const StarRating: React.FC<{ score: number }> = ({ score }) => (
 
 export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void, onNavigate: (page: string, id?: string) => void }> = ({ studentId, onBack, onNavigate }) => {
   const [activeTab, setActiveTab] = useState('overview');
-  const [student, setStudent] = useState<any>(null); 
+  const [student, setStudent] = useState<any>(null); // استخدام any مؤقتاً لتجنب أخطاء TypeScript مع الحقول الجديدة
   const [isLoading, setIsLoading] = useState(true);
   const [showEditModal, setShowEditModal] = useState(false);
 
@@ -102,16 +102,17 @@ export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void
     }
   };
 
+  // ==========================================
+  // دالة إرسال رسالة الواتساب التلقائية
+  // ==========================================
   const handleSendWhatsApp = () => {
     if(!student) return;
-    const directionText = student.memorizationDirection === 'REVERSE' ? 'من الناس إلى الفاتحة (مسار عكسي)' : 'من الفاتحة إلى الناس (مسار أمامي)';
     const msg = `أهلاً بك ${student.nameAr}! 🌸
 خطوة مباركة ونسأل الله أن ييسر لك حفظ كتابه ويجعله ربيع قلبك.
 
 تم اعتماد جدولك المبدئي على بركة الله، وإليك تفاصيل اشتراكك:
 
 🗓️ *المسار:* ${student.targetTrack || 'لم يحدد بعد'}
-🔄 *اتجاه الحفظ:* ${directionText}
 ⏰ *الباقة المتفق عليها:* باقة ${student.targetPackage || 'غير محدد'} (${student.daysPerWeek || 0} أيام أسبوعياً)
 📅 *مقدار الحفظ لكل حصة:* ${student.memPerSession || 0} وجه
 🏁 *تاريخ الختم المتوقع:* خلال ${student.expectedMonths || 0} شهراً بإذن الله
@@ -120,6 +121,7 @@ export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void
 لتأكيد الاشتراك وتثبيت موعدك، يرجى إتمام سداد الرسوم.
 في انتظارك لنبدأ رحلتنا القرآنية 🌷`;
 
+    // توجيه لفتح الواتساب (إذا كان هناك رقم للوالد يستخدمه، وإلا سيفتح الواتساب لاختيار جهة الاتصال)
     const phone = student.parentPhone ? student.parentPhone.replace(/\+/g, '') : '';
     const encodedMsg = encodeURIComponent(msg);
     const waUrl = phone ? `https://wa.me/${phone}?text=${encodedMsg}` : `https://wa.me/?text=${encodedMsg}`;
@@ -152,10 +154,12 @@ export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void
 
   return (
     <div className="space-y-4 animate-fadeIn">
+      {/* Breadcrumb */}
       <button onClick={onBack} className="flex items-center gap-2 text-gray-500 hover:text-[#1B4F72] transition-colors text-sm font-medium">
         <ArrowRight size={16} /> العودة إلى قائمة الطلاب
       </button>
 
+      {/* Profile Header */}
       <div className="card p-6">
         <div className="flex flex-col md:flex-row gap-5">
           <div className="relative flex-shrink-0">
@@ -171,8 +175,10 @@ export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void
                 <StatusBadge status={student.status} />
               </div>
               <div className="flex flex-wrap gap-2">
+                {/* زر إرسال الخطة واتساب الجديد */}
                 <button onClick={handleSendWhatsApp} className="btn btn-sm bg-[#25D366] hover:bg-[#1DA851] text-white gap-2 shadow-md">
-                  <MessageCircle size={16} /> إرسال الخطة واتساب
+                  <MessageCircle size={16} />
+                  إرسال الخطة واتساب
                 </button>
                 <button onClick={() => setShowEditModal(true)} className="btn btn-ghost border border-gray-200 btn-sm gap-1">
                   <Edit size={15} /> تعديل
@@ -183,6 +189,7 @@ export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void
               </div>
             </div>
 
+            {/* Info Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-5">
               <div className="flex items-center gap-2 text-sm text-gray-500">
                 <MapPin size={15} className="text-gray-400" />
@@ -198,6 +205,7 @@ export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void
           </div>
         </div>
 
+        {/* Quick Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6 pt-5 border-t border-gray-100">
           <div className="text-center">
             <p className="text-2xl font-black text-[#1B4F72]">{totalPagesMemorized.toFixed(1)}</p>
@@ -210,10 +218,11 @@ export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="tabs-scrollable">
         <div className="tabs bg-white rounded-xl border border-gray-100 px-2 overflow-hidden" style={{ minWidth: 'max-content' }}>
           {TABS.map((tab) => {
-            const Icon = tab.icon;
+            const Icon = tab.icon || GraduationCap;
             return (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`tab ${activeTab === tab.id ? 'active' : ''}`}>
                 <Icon size={15} /> {tab.label}
@@ -223,14 +232,19 @@ export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void
         </div>
       </div>
 
+      {/* Tab Content */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fadeIn">
           
+          {/* لوحة التسكين الذكي الجديدة */}
           <div className="card p-5 border-t-4 border-[#F39C12] shadow-sm relative overflow-hidden">
-            <div className="absolute top-[-20px] left-[-20px] opacity-5"><Calculator size={100} /></div>
+            <div className="absolute top-[-20px] left-[-20px] opacity-5">
+              <Calculator size={100} />
+            </div>
             <div className="relative z-10">
               <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Calculator size={18} className="text-[#F39C12]" /> خطة التسكين الذكي
+                <Calculator size={18} className="text-[#F39C12]" />
+                خطة التسكين الذكي
               </h3>
               
               {student.targetTrack ? (
@@ -246,8 +260,8 @@ export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void
                       <p className="font-bold text-[#1B4F72] text-lg">{student.expectedMonths} شهراً</p>
                     </div>
                     <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-gray-500 text-xs mb-1">اتجاه الحفظ</p>
-                      <p className="font-bold text-[#27AE60] text-sm mt-1">{student.memorizationDirection === 'REVERSE' ? 'من الناس إلى الفاتحة' : 'من الفاتحة إلى الناس'}</p>
+                      <p className="text-gray-500 text-xs mb-1">مقدار الحفظ اليومي</p>
+                      <p className="font-bold text-[#27AE60] text-lg">{student.memPerSession} وجه</p>
                     </div>
                     <div className="p-3 bg-gray-50 rounded-lg">
                       <p className="text-gray-500 text-xs mb-1">أيام الحضور</p>
@@ -262,12 +276,15 @@ export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void
               ) : (
                 <div className="text-center py-6 text-gray-400">
                   <p>لم يتم إجراء تسكين ذكي لهذا الطالب.</p>
-                  <button onClick={() => setShowEditModal(true)} className="btn btn-outline btn-sm mt-3 border-[#F39C12] text-[#F39C12] hover:bg-amber-50">إجراء تسكين الآن</button>
+                  <button onClick={() => setShowEditModal(true)} className="btn btn-outline btn-sm mt-3 border-[#F39C12] text-[#F39C12] hover:bg-amber-50">
+                    إجراء تسكين الآن
+                  </button>
                 </div>
               )}
             </div>
           </div>
 
+          {/* Recent Sessions */}
           <div className="card p-5">
             <h3 className="font-bold text-gray-800 mb-4">آخر الجلسات</h3>
             <div className="space-y-3">
@@ -291,6 +308,7 @@ export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void
         </div>
       )}
 
+      {/* باقي التبويبات (نفس الكود القديم للقرآن، المالية... إلخ) يمكن إضافتها هنا لتكتمل الصفحة */}
       {activeTab === 'quran' && (
         <div className="card p-5 text-center text-gray-400 animate-fadeIn">
           <BookMarked size={48} className="mx-auto mb-3 opacity-50" />
@@ -298,8 +316,13 @@ export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void
         </div>
       )}
 
+      {/* نافذة التعديل */}
       {showEditModal && (
-        <StudentFormModal student={student} onClose={() => setShowEditModal(false)} onSave={handleUpdateStudent} />
+        <StudentFormModal 
+          student={student}
+          onClose={() => setShowEditModal(false)} 
+          onSave={handleUpdateStudent} 
+        />
       )}
     </div>
   );

@@ -1,0 +1,422 @@
+// ============================================================
+// FINANCE PAGE - Financial Engine (USD $) API Connected + Print
+// ============================================================
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { CreditCard, DollarSign, FileText, CheckCircle, Clock, AlertCircle, Plus, Receipt, X, Printer } from 'lucide-react';
+import { Avatar } from '../components/shared/Avatar';
+
+export const FinancePage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'invoices' | 'payroll'>('invoices'); // جعلت الفواتير هي التبويب الافتراضي
+  const [isLoading, setIsLoading] = useState(true);
+
+  // البيانات من السيرفر
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
+  const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
+
+  // حالة النوافذ والطباعة
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [printingInvoice, setPrintingInvoice] = useState<any>(null);
+
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const [invRes, tRes, eRes, sRes, stuRes] = await Promise.all([
+        fetch(`${apiUrl}/invoices`), fetch(`${apiUrl}/teachers`),
+        fetch(`${apiUrl}/enrollments`), fetch(`${apiUrl}/sessions`), fetch(`${apiUrl}/students`)
+      ]);
+      
+      if (invRes.ok) setInvoices(await invRes.json());
+      if (tRes.ok) setTeachers(await tRes.json());
+      if (eRes.ok) setEnrollments(await eRes.json());
+      if (sRes.ok) setSessions(await sRes.json());
+      if (stuRes.ok) setStudents(await stuRes.json());
+    } catch (error) {
+      console.error("Finance Error:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => { 
+    fetchData(); 
+  }, []);
+
+  // 💡 دالة تشغيل الطباعة
+  const handlePrint = (invoice: any) => {
+    setPrintingInvoice(invoice);
+    // ننتظر قليلاً حتى يتم رسم مكون الطباعة المخفي، ثم نستدعي نافذة الطباعة
+    setTimeout(() => {
+      window.print();
+      setPrintingInvoice(null); // مسح البيانات بعد إغلاق نافذة الطباعة
+    }, 500);
+  };
+
+  // دالة تحديث حالة الفاتورة
+  const updateInvoiceStatus = async (id: string, newStatus: string) => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const res = await fetch(`${apiUrl}/invoices/${id}`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: newStatus })
+      });
+      if (res.ok) fetchData();
+    } catch (err) { 
+      alert('خطأ في تحديث الفاتورة'); 
+    }
+  };
+
+  const totalRevenue = useMemo(() => invoices.filter(i => i.status === 'PAID').reduce((sum, i) => sum + i.amount, 0), [invoices]);
+  const pendingRevenue = useMemo(() => invoices.filter(i => i.status === 'UNPAID' || i.status === 'OVERDUE').reduce((sum, i) => sum + i.amount, 0), [invoices]);
+
+  const payrollData = useMemo(() => {
+    const currentMonth = new Date().getMonth();
+    return teachers.map(teacher => {
+      let calculatedAmount = 0;
+      let breakdown = '';
+      if (teacher.paymentMethod === 'HOURLY') {
+        const completedSessions = sessions.filter(s => s.teacherId === teacher.id && s.status === 'COMPLETED' && new Date(s.scheduledAt).getMonth() === currentMonth);
+        const totalHours = completedSessions.reduce((sum, s) => sum + s.durationMinutes, 0) / 60;
+        calculatedAmount = totalHours * (teacher.hourlyRate || 0);
+        breakdown = `${totalHours.toFixed(1)} ساعة عمل`;
+      } else if (teacher.paymentMethod === 'PERCENTAGE') {
+        const totalSubscriptionsValue = enrollments.filter(e => e.teacherId === teacher.id).reduce((sum, e) => sum + (e.course?.price || 0), 0);
+        calculatedAmount = totalSubscriptionsValue * ((teacher.percentageRate || 0) / 100);
+        breakdown = `${teacher.percentageRate}% من إجمالي اشتراكات ($${totalSubscriptionsValue})`;
+      }
+      return { ...teacher, calculatedAmount, breakdown };
+    }).filter(t => t.calculatedAmount > 0);
+  }, [teachers, sessions, enrollments]);
+
+  const totalPayroll = payrollData.reduce((sum, t) => sum + t.calculatedAmount, 0);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center py-20">
+        <div className="w-10 h-10 border-4 border-[#1B4F72] border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 animate-fadeIn relative">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-gray-800">الإدارة المالية</h1>
+          <p className="text-gray-400 text-sm">نظام الفوترة وحساب المستحقات الآلي بالدولار ($)</p>
+        </div>
+        {activeTab === 'invoices' && (
+          <button onClick={() => setShowInvoiceModal(true)} className="btn btn-primary gap-2">
+            <Plus size={18} /> إنشاء فاتورة طالب
+          </button>
+        )}
+      </div>
+
+      <div className="tabs-scrollable">
+        <div className="tabs bg-white rounded-xl border border-gray-100 px-2" style={{ minWidth: 'max-content' }}>
+          <button onClick={() => setActiveTab('overview')} className={`tab ${activeTab === 'overview' ? 'active' : ''}`}><DollarSign size={15}/> ملخص الأداء</button>
+          <button onClick={() => setActiveTab('invoices')} className={`tab ${activeTab === 'invoices' ? 'active' : ''}`}><Receipt size={15}/> فواتير الطلاب</button>
+          <button onClick={() => setActiveTab('payroll')} className={`tab ${activeTab === 'payroll' ? 'active' : ''}`}><CreditCard size={15}/> مسير رواتب المعلمين</button>
+        </div>
+      </div>
+
+      <div className="card p-0 overflow-hidden">
+        
+        {activeTab === 'overview' && (
+          <div className="p-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="border-2 border-green-100 bg-green-50 p-5 rounded-2xl">
+                <div className="flex justify-between items-center mb-2"><p className="text-green-700 font-bold">الإيرادات المحصلة</p><DollarSign className="text-green-500" /></div>
+                <h3 className="text-3xl font-black text-green-800">${totalRevenue.toFixed(2)}</h3>
+              </div>
+              <div className="border-2 border-amber-100 bg-amber-50 p-5 rounded-2xl">
+                <div className="flex justify-between items-center mb-2"><p className="text-amber-700 font-bold">فواتير قيد الانتظار</p><Clock className="text-amber-500" /></div>
+                <h3 className="text-3xl font-black text-amber-800">${pendingRevenue.toFixed(2)}</h3>
+              </div>
+              <div className="border-2 border-blue-100 bg-blue-50 p-5 rounded-2xl">
+                <div className="flex justify-between items-center mb-2"><p className="text-blue-700 font-bold">مستحقات المعلمين</p><CreditCard className="text-blue-500" /></div>
+                <h3 className="text-3xl font-black text-blue-800">${totalPayroll.toFixed(2)}</h3>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'invoices' && (
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>رقم الفاتورة</th>
+                  <th>الطالب</th>
+                  <th>المبلغ ($)</th>
+                  <th>تاريخ الاستحقاق</th>
+                  <th>الحالة</th>
+                  <th>الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.length === 0 ? (
+                  <tr><td colSpan={6} className="text-center py-8 text-gray-400">لا توجد فواتير مسجلة</td></tr> 
+                ) : (
+                  invoices.map(inv => (
+                    <tr key={inv.id}>
+                      <td className="font-mono text-xs text-gray-500">#{inv.id.split('-')[0].toUpperCase()}</td>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <Avatar name={inv.student?.nameAr || 'غير معروف'} size="xs" />
+                          <span className="font-bold">{inv.student?.nameAr || 'غير معروف'}</span>
+                        </div>
+                      </td>
+                      <td className="font-black text-[#1B4F72]">${inv.amount?.toFixed(2)}</td>
+                      <td className="text-sm text-gray-500">{new Date(inv.dueDate).toLocaleDateString('ar-SA')}</td>
+                      <td>
+                        <span className={`px-2 py-1 text-xs font-bold rounded-lg flex items-center gap-1 w-max ${inv.status === 'PAID' ? 'bg-green-100 text-green-700' : inv.status === 'OVERDUE' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {inv.status === 'PAID' ? <CheckCircle size={12}/> : inv.status === 'OVERDUE' ? <AlertCircle size={12}/> : <Clock size={12}/>}
+                          {inv.status === 'PAID' ? 'مدفوعة' : inv.status === 'OVERDUE' ? 'متأخرة' : 'بانتظار الدفع'}
+                        </span>
+                      </td>
+                      <td>
+                        {/* 💡 هنا قمنا بإصلاح المشكلة: الأزرار تظهر دائماً */}
+                        <div className="flex items-center gap-2">
+                          <button 
+                            onClick={() => handlePrint(inv)} 
+                            className="p-1.5 bg-blue-50 text-[#1B4F72] hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors tooltip"
+                            data-tip="طباعة الإيصال"
+                          >
+                            <Printer size={16} />
+                          </button>
+                          
+                          {inv.status !== 'PAID' && (
+                            <button 
+                              onClick={() => updateInvoiceStatus(inv.id, 'PAID')} 
+                              className="px-3 py-1.5 bg-white border border-green-200 text-green-600 hover:bg-green-50 rounded-lg text-xs font-bold transition-colors"
+                            >
+                              تأكيد الدفع
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === 'payroll' && (
+          <div className="overflow-x-auto">
+            <div className="p-4 bg-blue-50 border-b border-blue-100 flex items-center gap-2 text-blue-800 text-sm">
+              <AlertCircle size={16} className="flex-shrink-0" /> 
+              يتم حساب المستحقات آلياً بناءً على الجلسات (لصاحب الأجر بالساعة) واشتراكات الطلاب (لصاحب النسبة).
+            </div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>المعلم</th>
+                  <th>نظام التعاقد</th>
+                  <th>تفاصيل الحساب</th>
+                  <th>المستحق ($)</th>
+                  <th>الإجراءات</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payrollData.length === 0 ? (
+                  <tr><td colSpan={5} className="text-center py-8 text-gray-400">لا توجد مستحقات مسجلة لهذا الشهر</td></tr> 
+                ) : (
+                  payrollData.map(t => (
+                    <tr key={t.id}>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <Avatar name={t.nameAr} size="sm" />
+                          <span className="font-bold">{t.nameAr}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="text-xs px-2 py-1 bg-gray-100 rounded-md font-medium text-gray-600">
+                          {t.paymentMethod === 'HOURLY' ? 'أجر بالساعة' : 'نسبة من الدخل'}
+                        </span>
+                      </td>
+                      <td className="text-sm text-gray-500">{t.breakdown}</td>
+                      <td className="font-black text-[#27AE60] text-lg">${t.calculatedAmount.toFixed(2)}</td>
+                      <td>
+                        <button className="btn btn-sm btn-primary">صرف الدفعة</button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {showInvoiceModal && <AddInvoiceModal students={students} onClose={() => setShowInvoiceModal(false)} onSave={fetchData} />}
+      
+      {/* 💡 مكون الطباعة المخفي الذي يظهر فقط عند الضغط على زر الطباعة */}
+      {printingInvoice && (
+        <ReceiptPrintComponent 
+          invoice={printingInvoice} 
+          academyName={localStorage.getItem('academyName') || 'أكاديمية الإتقان'} 
+          academyLogo={localStorage.getItem('academyLogo') || 'إ'} 
+        />
+      )}
+    </div>
+  );
+};
+
+// ============================================================
+// Add Invoice Modal Component
+// ============================================================
+const AddInvoiceModal: React.FC<{ students: any[], onClose: () => void, onSave: () => void }> = ({ students, onClose, onSave }) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    studentId: '', amount: '', dueDate: new Date().toISOString().split('T')[0], notes: ''
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.studentId || !formData.amount) return alert('أكمل البيانات المطلوبة');
+    setIsLoading(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      await fetch(`${apiUrl}/invoices`, { 
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) 
+      });
+      onSave(); onClose();
+    } catch (err) { alert('خطأ في إصدار الفاتورة'); } finally { setIsLoading(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal animate-slideUp" style={{ maxWidth: 450 }}>
+        <div className="modal-header">
+          <h2 className="font-bold flex items-center gap-2"><FileText size={20} className="text-[#1B4F72]" /> إصدار فاتورة طالب ($)</h2>
+          <button onClick={onClose} className="btn btn-ghost btn-icon"><X size={20}/></button>
+        </div>
+        <form onSubmit={handleSubmit} className="modal-body space-y-4">
+          <div className="form-group">
+            <label className="form-label required">الطالب</label>
+            <select required className="form-input form-select" value={formData.studentId} onChange={e => setFormData({...formData, studentId: e.target.value})}>
+              <option value="">اختر طالباً...</option>
+              {students.map(s => <option key={s.id} value={s.id}>{s.nameAr}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label required">المبلغ المستحق (USD)</label>
+            <div className="relative">
+              <DollarSign className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input required type="number" step="0.01" className="form-input pr-10" dir="ltr" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="150.00" />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label required">تاريخ الاستحقاق</label>
+            <input required type="date" className="form-input" value={formData.dueDate} onChange={e => setFormData({...formData, dueDate: e.target.value})} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">البيان / ملاحظات</label>
+            <input type="text" className="form-input" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="رسوم دراسية..." />
+          </div>
+          <div className="modal-footer pt-4">
+            <button type="button" onClick={onClose} className="btn btn-ghost">إلغاء</button>
+            <button type="submit" disabled={isLoading} className="btn btn-primary">{isLoading ? 'جاري الإصدار...' : 'حفظ الفاتورة'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================
+// Printable Receipt Component (Inline for safety)
+// ============================================================
+const ReceiptPrintComponent: React.FC<{ invoice: any, academyName: string, academyLogo: string }> = ({ invoice, academyName, academyLogo }) => {
+  if (!invoice) return null;
+  const startDate = new Date(invoice.issueDate || Date.now());
+  const endDate = new Date(invoice.dueDate || new Date(startDate).setMonth(startDate.getMonth() + 1));
+
+  return (
+    <div className="print-receipt-container" dir="rtl">
+      <style>
+        {`
+          @media print {
+            body * { visibility: hidden; }
+            .print-receipt-container, .print-receipt-container * { visibility: visible; }
+            .print-receipt-container {
+              position: absolute; left: 0; top: 0; width: 100%; padding: 40px; background: #fff;
+              -webkit-print-color-adjust: exact !important; color-adjust: exact !important;
+            }
+            .sidebar, .header, .tabs, .modal, .btn { display: none !important; }
+            .r-header { background: linear-gradient(135deg, #1B4F72 0%, #27AE60 100%) !important; color: white !important; }
+            .r-logo { background: #F39C12 !important; color: white !important; }
+            .r-badge { background: rgba(255,255,255,0.15) !important; border: 1px solid rgba(255,255,255,0.2) !important; }
+            .r-period { background: #E8F4F8 !important; border: 1px dashed #2E86AB !important; }
+          }
+          @media screen { .print-receipt-container { display: none; } }
+        `}
+      </style>
+
+      <div className="r-header rounded-3xl p-8 mb-8 flex justify-between items-center shadow-sm">
+        <div className="flex items-center gap-5">
+          <div className="r-logo w-16 h-16 rounded-2xl flex items-center justify-center text-3xl font-black">{academyLogo}</div>
+          <div>
+            <h1 className="text-2xl font-black mb-1">{academyName}</h1>
+            <p className="text-sm opacity-80">لعلوم القرآن الكريم والتعليم الأكاديمي المتقدم</p>
+          </div>
+        </div>
+        <div className="r-badge p-4 rounded-xl text-center">
+          <h2 className="text-lg font-bold mb-1">إيصال سداد إلكتروني</h2>
+          <p className="font-mono text-sm font-bold text-[#F39C12]">INV-{invoice.id.split('-')[0].toUpperCase()}</p>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center mb-8 px-4 text-sm font-bold">
+        <div className="flex gap-2"><span className="text-gray-500">تاريخ الإصدار:</span> <span>{startDate.toLocaleDateString('ar-SA')}</span></div>
+        <div className="flex gap-2"><span className="text-gray-500">العملة:</span> <span>الدولار الأمريكي ($)</span></div>
+        <div className="flex gap-2"><span className="text-gray-500">الحالة:</span> <span className="text-green-600">✓ {invoice.status === 'PAID' ? 'مدفوع' : 'بانتظار الدفع'}</span></div>
+      </div>
+
+      <div className="border border-gray-200 rounded-2xl p-6 mb-6">
+        <h3 className="text-[#1B4F72] font-black border-b border-gray-100 pb-3 mb-4">بيانات الطالب</h3>
+        <div className="grid grid-cols-2 gap-6">
+          <div><p className="text-xs text-gray-500 mb-1">اسم الطالب:</p><p className="font-bold text-gray-800 text-lg">{invoice.student?.nameAr || 'غير محدد'}</p></div>
+        </div>
+      </div>
+
+      <div className="r-period p-5 mb-6 text-center rounded-2xl">
+        <p className="text-[#1B4F72] font-bold mb-3">فترة صلاحية الاشتراك (توضيحي)</p>
+        <div className="flex justify-around items-center font-bold">
+          <div><p className="text-xs text-gray-500 mb-1">بداية الاشتراك</p><p className="text-lg">{startDate.toLocaleDateString('ar-SA')}</p></div>
+          <div className="text-gray-400">◄◄◄</div>
+          <div><p className="text-xs text-gray-500 mb-1">تاريخ الاستحقاق</p><p className="text-lg">{endDate.toLocaleDateString('ar-SA')}</p></div>
+        </div>
+      </div>
+
+      <table className="w-full mb-8 text-sm">
+        <thead className="bg-gray-50 text-[#1B4F72]">
+          <tr><th className="p-4 text-right rounded-r-xl">البيان / الخدمة</th><th className="p-4 text-center">الكمية</th><th className="p-4 text-left rounded-l-xl">الإجمالي ($)</th></tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          <tr>
+            <td className="p-4 font-bold">{invoice.notes || 'رسوم دراسية واشتراك'}</td>
+            <td className="p-4 text-center text-gray-500">1</td>
+            <td className="p-4 text-left font-black text-lg">${invoice.amount?.toFixed(2)}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div className="flex justify-between items-end mt-12 px-4 border-t border-gray-100 pt-8">
+        <div className="text-xs text-gray-500 leading-relaxed max-w-sm">
+          <p className="font-bold text-gray-800 mb-2">ملاحظات هامة:</p>
+          • يعتبر هذا الإيصال مستنداً رسمياً.<br/>• يتم تفعيل الصلاحيات بعد سداد الرسوم.
+        </div>
+        <div className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-full flex items-center justify-center text-gray-400 text-xs font-bold rotate-[-15deg]">
+          الختم الرسمي
+        </div>
+      </div>
+    </div>
+  );
+};

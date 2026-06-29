@@ -38,6 +38,7 @@ enum AttendanceStatus {
   LATE
 }
 
+// الحالات الجديدة للنظام المالي
 enum InvoiceStatus {
   PAID
   UNPAID
@@ -69,28 +70,13 @@ model Student {
   status          StudentStatus @default(LEAD)
   nationality     String?
   timezone        String        @default("Asia/Riyadh")
-  
-  // ==========================================
-  // الحقول الجديدة لبيانات التسكين الذكي
-  // ==========================================
-  parentName      String?       
-  parentPhone     String?       
-  targetTrack     String?       
-  targetPackage   String?       
-  memPerSession   Float?        
-  daysPerWeek     Int?          
-  expectedMonths  Int?          
-  monthlyFee      Float?        
-  memorizationDirection String? @default("FORWARD") // FORWARD (الفاتحة للناس) أو REVERSE (الناس للفاتحة)
-  // ==========================================
-
   createdAt       DateTime      @default(now())
   
   user            User          @relation(fields: [userId], references: [id])
   enrollments     Enrollment[]
   quranRecords    QuranRecord[]
   attendances     Attendance[]  
-  invoices        Invoice[]     
+  invoices        Invoice[]     // ربط الطالب بفواتيره
 }
 
 model Teacher {
@@ -109,7 +95,7 @@ model Teacher {
   user            User     @relation(fields: [userId], references: [id])
   enrollments     Enrollment[]
   sessions        Session[] 
-  salaries        TeacherSalary[] 
+  salaries        TeacherSalary[] // ربط المعلم بمسير رواتبه
 }
 
 model Course {
@@ -188,10 +174,14 @@ model Attendance {
   @@unique([sessionId, studentId]) 
 }
 
+// ==========================================
+// النظام المالي (الفواتير والرواتب) بالدولار $
+// ==========================================
+
 model Invoice {
   id          String        @id @default(uuid())
   studentId   String
-  amount      Float         
+  amount      Float         // المبلغ بالدولار $
   status      InvoiceStatus @default(UNPAID)
   issueDate   DateTime      @default(now())
   dueDate     DateTime
@@ -206,10 +196,10 @@ model TeacherSalary {
   teacherId       String
   month           Int
   year            Int
-  amount          Float        
+  amount          Float        // المبلغ بالدولار $
   status          SalaryStatus @default(PENDING)
   paymentDate     DateTime?
-  calculationMode String       
+  calculationMode String       // توثيق طريقة الحساب لحظة الصرف (ساعات أو نسبة)
   createdAt       DateTime     @default(now())
 
   teacher         Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)

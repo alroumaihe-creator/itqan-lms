@@ -73,15 +73,14 @@ model Student {
   // ==========================================
   // الحقول الجديدة لبيانات التسكين الذكي
   // ==========================================
-  parentName      String?       
-  parentPhone     String?       
-  targetTrack     String?       
-  targetPackage   String?       
-  memPerSession   Float?        
-  daysPerWeek     Int?          
-  expectedMonths  Int?          
-  monthlyFee      Float?        
-  memorizationDirection String? @default("FORWARD") // FORWARD (الفاتحة للناس) أو REVERSE (الناس للفاتحة)
+  parentName      String?       // اسم ولي الأمر
+  parentPhone     String?       // رقم ولي الأمر
+  targetTrack     String?       // مسار الحفظ (مثال: مسار الإتقان)
+  targetPackage   String?       // الباقة المختارة (مثال: المعايشة)
+  memPerSession   Float?        // مقدار الحفظ لكل حصة (بالأوجه)
+  daysPerWeek     Int?          // عدد أيام الحضور أسبوعياً
+  expectedMonths  Int?          // المدة المتوقعة للختم بالشهور
+  monthlyFee      Float?        // الرسوم الشهرية المتفق عليها
   // ==========================================
 
   createdAt       DateTime      @default(now())

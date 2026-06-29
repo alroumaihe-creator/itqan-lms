@@ -1,0 +1,354 @@
+// ============================================================
+// STUDENT DETAIL PAGE - Connected to Real API with Enrollment System
+// ============================================================
+
+import React, { useState, useEffect } from 'react';
+import {
+  ArrowRight, Edit, BookMarked, GraduationCap,
+  Calendar, CreditCard, FileText, MessageSquare, Mail,
+  MapPin, Clock, TrendingUp, Trash2, X, Plus
+} from 'lucide-react';
+import { StatusBadge } from '../components/shared/StatusBadge';
+import { Avatar } from '../components/shared/Avatar';
+import { TRACK_TYPE_LABELS } from '../utils/formatters';
+
+const TABS = [
+  { id: 'overview', label: 'نظرة عامة', icon: GraduationCap },
+  { id: 'quran', label: 'تتبع القرآن', icon: BookMarked },
+  { id: 'academic', label: 'الأكاديمي', icon: TrendingUp },
+  { id: 'finance', label: 'المالية', icon: CreditCard },
+];
+
+const StarRating: React.FC<{ score: number }> = ({ score }) => (
+  <div className="flex gap-0.5">
+    {Array.from({ length: 10 }).map((_, i) => (
+      <span key={i} className={`text-base leading-none ${i < score ? 'text-[#F39C12]' : 'text-gray-200'}`}>★</span>
+    ))}
+    <span className="text-sm font-bold text-gray-600 mr-1">{score}/10</span>
+  </div>
+);
+
+export const StudentDetailPage: React.FC<{ studentId: string, onBack: () => void, onNavigate: (page: string, id?: string) => void }> = ({ studentId, onBack }) => {
+  const [activeTab, setActiveTab] = useState('overview');
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const [student, setStudent] = useState<any>(null);
+  const [enrollments, setEnrollments] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [quranRecords, setQuranRecords] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
+
+  const fetchStudentData = async () => {
+    try {
+      setIsLoading(true);
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      
+      const [studentsRes, enrollmentsRes, invoicesRes, quranRes, coursesRes, teachersRes] = await Promise.all([
+        fetch(`${apiUrl}/students`), fetch(`${apiUrl}/enrollments`), fetch(`${apiUrl}/invoices`),
+        fetch(`${apiUrl}/quran-records/${studentId}`), fetch(`${apiUrl}/courses`), fetch(`${apiUrl}/teachers`)
+      ]);
+
+      if (studentsRes.ok) {
+        const allStudents = await studentsRes.json();
+        setStudent(allStudents.find((s: any) => s.id === studentId));
+      }
+      if (enrollmentsRes.ok) {
+        const allEnrollments = await enrollmentsRes.json();
+        setEnrollments(allEnrollments.filter((e: any) => e.studentId === studentId));
+      }
+      if (invoicesRes.ok) {
+        const allInvoices = await invoicesRes.json();
+        setInvoices(allInvoices.filter((i: any) => i.studentId === studentId));
+      }
+      if (quranRes.ok) setQuranRecords(await quranRes.json());
+      if (coursesRes.ok) setCourses(await coursesRes.json());
+      if (teachersRes.ok) setTeachers(await teachersRes.json());
+
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchStudentData(); }, [studentId]);
+
+  const handleDeleteStudent = async () => {
+    if (!window.confirm('هل أنت متأكد من حذف هذا الطالب نهائياً؟')) return;
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const res = await fetch(`${apiUrl}/students/${studentId}`, { method: 'DELETE' });
+      if (res.ok) onBack();
+    } catch (error) { alert("حدث خطأ أثناء الحذف."); }
+  };
+
+  if (isLoading) return <div className="flex justify-center py-20"><div className="w-10 h-10 border-4 border-[#1B4F72] border-t-transparent rounded-full animate-spin"></div></div>;
+  if (!student) return <div className="text-center py-20 text-red-500 font-bold">لم يتم العثور على بيانات الطالب</div>;
+
+  const totalPagesMemorized = quranRecords.reduce((sum, r) => sum + (r.pagesCount || 0), 0);
+  const avgScore = quranRecords.length > 0 ? quranRecords.reduce((s, r) => s + (r.recitationScore || 0), 0) / quranRecords.length : 0;
+
+  return (
+    <div className="space-y-4 animate-fadeIn">
+      <button onClick={onBack} className="flex items-center gap-2 text-gray-500 hover:text-[#1B4F72] text-sm font-bold mb-2">
+        <ArrowRight size={16} /> العودة إلى قائمة الطلاب
+      </button>
+
+      {/* الترويسة الشاملة للطالب */}
+      <div className="card p-6">
+        <div className="flex flex-col md:flex-row gap-5">
+          <div><Avatar name={student.nameAr} size="xl" /></div>
+          <div className="flex-1">
+            <div className="flex items-start justify-between">
+              <div>
+                <h1 className="text-2xl font-black text-gray-800 mb-1">{student.nameAr}</h1>
+                <StatusBadge status={student.status} />
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => setShowEditModal(true)} className="btn btn-ghost border border-gray-200 btn-sm gap-1 hover:border-[#1B4F72] hover:text-[#1B4F72]">
+                  <Edit size={15} /> تعديل
+                </button>
+                <button onClick={handleDeleteStudent} className="btn btn-icon btn-ghost btn-sm text-red-500 hover:bg-red-50">
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4 text-sm text-gray-500">
+              <div className="flex items-center gap-2"><Mail size={15} /> <span className="truncate">{student.user?.email || 'لا يوجد بريد'}</span></div>
+              <div className="flex items-center gap-2"><MapPin size={15} /> <span>{student.nationality || 'غير محدد'}</span></div>
+              <div className="flex items-center gap-2"><Clock size={15} /> <span>منذ {new Date(student.createdAt).toLocaleDateString('ar-SA')}</span></div>
+            </div>
+          </div>
+        </div>
+
+        {/* إحصائيات سريعة */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5 pt-5 border-t border-gray-100">
+          <div className="text-center">
+            <p className="text-2xl font-black text-[#1B4F72]">{totalPagesMemorized.toFixed(1)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">صفحات محفوظة</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-black text-[#27AE60]">{avgScore.toFixed(1)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">متوسط الدرجات</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-black text-[#F39C12]">{enrollments.length}</p>
+            <p className="text-xs text-gray-400 mt-0.5">مسارات مسجل بها</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-black text-[#9B59B6]">{invoices.filter(i => i.status === 'UNPAID').length}</p>
+            <p className="text-xs text-gray-400 mt-0.5">فواتير مستحقة</p>
+          </div>
+        </div>
+      </div>
+
+      {/* شريط التنقل داخلي */}
+      <div className="tabs-scrollable">
+        <div className="tabs bg-white rounded-xl border border-gray-100 px-2">
+          {TABS.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`tab ${activeTab === tab.id ? 'active' : ''}`}>
+                <Icon size={15} /> {tab.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* التبويب 1: نظرة عامة */}
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 animate-fadeIn">
+          <div className="card p-5">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-bold text-gray-800">الدورات المسجل بها</h3>
+              <button onClick={() => setShowEnrollModal(true)} className="btn btn-primary btn-sm gap-1"><Plus size={14}/> تسجيل في دورة</button>
+            </div>
+            {enrollments.length === 0 ? <p className="text-gray-400 text-sm text-center py-8">لا توجد دورات مسجلة حالياً</p> : (
+              <div className="space-y-3">
+                {enrollments.map((enrollment) => (
+                  <div key={enrollment.id} className="border border-gray-100 bg-gray-50 rounded-xl p-3 flex justify-between items-center">
+                    <div>
+                      <p className="font-bold text-gray-800 text-sm">{enrollment.course?.nameAr}</p>
+                      <p className="text-xs text-[#1B4F72] mt-1">المعلم المشرف: {enrollment.teacher?.nameAr || 'لم يتم التعيين'}</p>
+                    </div>
+                    <span className="text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded">نشط</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <div className="card p-5">
+            <h3 className="font-bold text-gray-800 mb-4">ملخص مالي</h3>
+            <div className="space-y-2">
+              <div className="flex justify-between p-3 bg-green-50 rounded-lg"><span className="text-green-800 font-bold">إجمالي المدفوع</span><span className="font-black text-green-700">${invoices.filter(i => i.status === 'PAID').reduce((s, i) => s + i.amount, 0).toFixed(2)}</span></div>
+              <div className="flex justify-between p-3 bg-amber-50 rounded-lg"><span className="text-amber-800 font-bold">بانتظار الدفع</span><span className="font-black text-amber-700">${invoices.filter(i => i.status === 'UNPAID' || i.status === 'OVERDUE').reduce((s, i) => s + i.amount, 0).toFixed(2)}</span></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* التبويب 2: تتبع القرآن */}
+      {activeTab === 'quran' && (
+        <div className="card p-5 animate-fadeIn">
+          <h3 className="font-bold text-gray-800 mb-4">سجل الجلسات القرآنية</h3>
+          {quranRecords.length === 0 ? <p className="text-gray-400 text-center py-8">لا توجد سجلات قرآنية محفوظة لهذا الطالب حتى الآن</p> : (
+            <div className="space-y-3">
+              {quranRecords.map((record) => (
+                <div key={record.id} className="border border-gray-100 rounded-xl p-4 flex flex-col md:flex-row gap-4 justify-between hover:bg-gray-50">
+                  <div>
+                    <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-blue-100 text-[#1B4F72] mb-2 inline-block">
+                      {TRACK_TYPE_LABELS[record.trackType] || record.trackType}
+                    </span>
+                    <p className="font-bold text-gray-800">من سور: {record.surahStart} ← إلى: {record.surahEnd}</p>
+                    <p className="text-xs text-gray-400 mt-1">{new Date(record.createdAt).toLocaleDateString('ar-SA')}</p>
+                  </div>
+                  <div className="text-right flex flex-col items-end justify-center">
+                    <span className="font-black text-[#27AE60] bg-green-50 px-2 py-1 rounded text-sm">{record.pagesCount} صفحة</span>
+                    {record.recitationScore && <div className="mt-1"><StarRating score={record.recitationScore} /></div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* التبويب 3: الأكاديمي */}
+      {activeTab === 'academic' && (
+        <div className="card p-5 animate-fadeIn">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-gray-800">تفاصيل المسارات التعليمية</h3>
+            <button onClick={() => setShowEnrollModal(true)} className="btn btn-primary btn-sm gap-1"><Plus size={14}/> تسجيل في دورة</button>
+          </div>
+          {enrollments.length === 0 ? <p className="text-gray-400 text-sm text-center py-8">غير مسجل بأي مسار</p> : (
+            <div className="space-y-4">
+              {enrollments.map((e) => (
+                <div key={e.id} className="border border-gray-200 rounded-xl p-4">
+                  <h4 className="font-bold text-lg text-[#1B4F72] mb-1">{e.course?.nameAr}</h4>
+                  <p className="text-sm text-gray-500 mb-3">المعلم المشرف: {e.teacher?.nameAr || 'غير محدد'}</p>
+                  <div className="flex items-center justify-between text-xs font-bold mb-1"><span>نسبة الإنجاز</span><span>{e.progress}%</span></div>
+                  <div className="w-full bg-gray-200 rounded-full h-2.5"><div className="bg-[#27AE60] h-2.5 rounded-full" style={{ width: `${e.progress}%` }}></div></div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* التبويب 4: المالية */}
+      {activeTab === 'finance' && (
+        <div className="card p-5 animate-fadeIn">
+          <h3 className="font-bold text-gray-800 mb-4">الفواتير</h3>
+          {invoices.length === 0 ? <p className="text-gray-400 text-sm text-center py-8">لا توجد فواتير مالية مسجلة</p> : (
+            <table className="w-full text-sm text-right">
+              <thead className="bg-gray-50 text-gray-500"><tr><th className="p-3">رقم الفاتورة</th><th className="p-3">التاريخ</th><th className="p-3">المبلغ</th><th className="p-3">الحالة</th></tr></thead>
+              <tbody>
+                {invoices.map(inv => (
+                  <tr key={inv.id} className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="p-3 font-mono text-xs">INV-{inv.id.split('-')[0].toUpperCase()}</td>
+                    <td className="p-3 text-gray-500">{new Date(inv.issueDate).toLocaleDateString('ar-SA')}</td>
+                    <td className="p-3 font-bold text-[#1B4F72]">${inv.amount.toFixed(2)}</td>
+                    <td className="p-3">{inv.status === 'PAID' ? <span className="text-green-600 font-bold bg-green-50 px-2 py-1 rounded text-xs">مدفوعة</span> : <span className="text-amber-600 font-bold bg-amber-50 px-2 py-1 rounded text-xs">قيد الانتظار</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {/* النوافذ المنبثقة */}
+      {showEditModal && <StudentEditModal student={student} onClose={() => setShowEditModal(false)} onSave={fetchStudentData} />}
+      {showEnrollModal && <EnrollmentModal studentId={student.id} courses={courses} teachers={teachers} onClose={() => setShowEnrollModal(false)} onSave={fetchStudentData} />}
+    </div>
+  );
+};
+
+// ============================================================
+// Enrollment Modal Component
+// ============================================================
+const EnrollmentModal: React.FC<{ studentId: string, courses: any[], teachers: any[], onClose: () => void, onSave: () => void }> = ({ studentId, courses, teachers, onClose, onSave }) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({ courseId: '', teacherId: '' });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.courseId) return alert('يرجى اختيار الدورة!');
+    setIsLoading(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const res = await fetch(`${apiUrl}/enrollments`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId, courseId: formData.courseId, teacherId: formData.teacherId || null })
+      });
+      if (res.ok) { onSave(); onClose(); } else { alert('الطالب مسجل بالفعل في هذه الدورة.'); }
+    } catch (err) { alert('خطأ في الاتصال بالسيرفر'); } finally { setIsLoading(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal animate-slideUp" style={{ maxWidth: 450 }}>
+        <div className="modal-header"><h2 className="font-bold">تسجيل الطالب في مسار / دورة</h2><button onClick={onClose} className="btn btn-ghost btn-icon"><X size={20}/></button></div>
+        <form onSubmit={handleSubmit} className="modal-body space-y-4">
+          <div className="form-group">
+            <label className="form-label required">المسار / الدورة</label>
+            <select required className="form-input form-select" value={formData.courseId} onChange={e => setFormData({...formData, courseId: e.target.value})}>
+              <option value="">اختر الدورة...</option>
+              {courses.map(c => <option key={c.id} value={c.id}>{c.nameAr}</option>)}
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">المعلم المشرف</label>
+            <select className="form-input form-select" value={formData.teacherId} onChange={e => setFormData({...formData, teacherId: e.target.value})}>
+              <option value="">تعيين لاحقاً...</option>
+              {teachers.map(t => <option key={t.id} value={t.id}>{t.nameAr} - {t.specialization}</option>)}
+            </select>
+          </div>
+          <div className="modal-footer pt-2">
+            <button type="button" onClick={onClose} disabled={isLoading} className="btn btn-ghost">إلغاء</button>
+            <button type="submit" disabled={isLoading} className="btn btn-primary">{isLoading ? 'جاري التسجيل...' : 'تسجيل الآن'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================
+// Edit Modal Component
+// ============================================================
+const StudentEditModal: React.FC<{ student: any, onClose: () => void, onSave: () => void }> = ({ student, onClose, onSave }) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({ nameAr: student.nameAr || '', email: student.user?.email || '', status: student.status || 'ACTIVE', nationality: student.nationality || '' });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const res = await fetch(`${apiUrl}/students/${student.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
+      if (res.ok) { onSave(); onClose(); }
+    } catch (error) { alert('خطأ في الاتصال.'); } finally { setIsLoading(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal animate-slideUp" style={{ maxWidth: 500 }}>
+        <div className="modal-header"><h2 className="text-lg font-bold">تعديل بيانات الطالب</h2><button onClick={onClose}><X size={20}/></button></div>
+        <form onSubmit={handleSubmit} className="modal-body space-y-4">
+          <input required type="text" className="form-input" value={formData.nameAr} onChange={e => setFormData({...formData, nameAr: e.target.value})} placeholder="الاسم" />
+          <input required type="email" className="form-input" dir="ltr" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} placeholder="الإيميل" />
+          <input type="text" className="form-input" value={formData.nationality} onChange={e => setFormData({...formData, nationality: e.target.value})} placeholder="الجنسية" />
+          <button type="submit" disabled={isLoading} className="btn btn-primary w-full">{isLoading ? 'جاري الحفظ...' : 'حفظ التعديلات'}</button>
+        </form>
+      </div>
+    </div>
+  );
+};

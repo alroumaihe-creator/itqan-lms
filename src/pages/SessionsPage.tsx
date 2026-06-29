@@ -5,9 +5,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar, Plus, Video, Clock, User, CheckCircle, 
-  XCircle, PlayCircle, AlertCircle, Trash2, ExternalLink, RefreshCw
+  XCircle, Trash2, ExternalLink, RefreshCw, UserCheck, X
 } from 'lucide-react';
-import { StatusBadge } from '../components/shared/StatusBadge';
 import { DAYS_AR } from '../utils/formatters';
 
 type ViewMode = 'list' | 'calendar';
@@ -15,35 +14,47 @@ type SessionStatus = 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | '
 
 export const SessionsPage: React.FC<{ onNavigate: (page: string) => void }> = () => {
   const [sessions, setSessions] = useState<any[]>([]);
+  const [enrollments, setEnrollments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [view, setView] = useState<ViewMode>('list');
   const [statusFilter, setStatusFilter] = useState<SessionStatus>('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
+  
+  // للتقويم
   const [selectedDate, setSelectedDate] = useState(new Date());
 
-  const fetchSessions = async () => {
+  // للفلترة بالتاريخ في القائمة
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [dateFrom, setDateFrom] = useState(''); // فارغ يعني عرض الكل
+  const [dateTo, setDateTo] = useState('');
+
+  // لرصد الحضور
+  const [attendanceSession, setAttendanceSession] = useState<any>(null);
+
+  const fetchData = async () => {
     try {
       setIsLoading(true);
       const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
-      const response = await fetch(`${apiUrl}/sessions`);
-      if (response.ok) {
-        const data = await response.json();
-        setSessions(data);
-      }
+      const [sessionsRes, enrollmentsRes] = await Promise.all([
+        fetch(`${apiUrl}/sessions`),
+        fetch(`${apiUrl}/enrollments`)
+      ]);
+      if (sessionsRes.ok) setSessions(await sessionsRes.json());
+      if (enrollmentsRes.ok) setEnrollments(await enrollmentsRes.json());
     } catch (error) {
-      console.error("خطأ في جلب الجلسات:", error);
+      console.error("خطأ في جلب البيانات:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchSessions();
+    fetchData();
   }, []);
 
-  // دالة حذف الجلسة
+  // دالة الحذف
   const handleDeleteSession = async (id: string) => {
-    if (!window.confirm('هل أنت متأكد من حذف هذه الجلسة؟ لا يمكن التراجع عن هذا الإجراء.')) return;
+    if (!window.confirm('هل أنت متأكد من حذف هذه الجلسة؟')) return;
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
       const res = await fetch(`${apiUrl}/sessions/${id}`, { method: 'DELETE' });
@@ -57,22 +68,35 @@ export const SessionsPage: React.FC<{ onNavigate: (page: string) => void }> = ()
     }
   };
 
+  // فلترة متقدمة (بالحالة والتاريخ)
   const filtered = useMemo(() => {
-    if (statusFilter === 'ALL') return sessions;
-    return sessions.filter((s) => s.status === statusFilter);
-  }, [sessions, statusFilter]);
+    let result = sessions;
+    
+    // فلتر الحالة
+    if (statusFilter !== 'ALL') {
+      result = result.filter((s) => s.status === statusFilter);
+    }
 
-  // Generate calendar month view
+    // فلتر التاريخ
+    if (dateFrom) {
+      result = result.filter(s => new Date(s.scheduledAt).toISOString().split('T')[0] >= dateFrom);
+    }
+    if (dateTo) {
+      result = result.filter(s => new Date(s.scheduledAt).toISOString().split('T')[0] <= dateTo);
+    }
+
+    return result.sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+  }, [sessions, statusFilter, dateFrom, dateTo]);
+
+  // للتقويم
   const daysInMonth = useMemo(() => {
     const year = selectedDate.getFullYear();
     const month = selectedDate.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const days = [];
-
     for (let i = 0; i < firstDay.getDay(); i++) days.push(null);
     for (let d = 1; d <= lastDay.getDate(); d++) days.push(new Date(year, month, d));
-    
     return days;
   }, [selectedDate]);
 
@@ -80,36 +104,21 @@ export const SessionsPage: React.FC<{ onNavigate: (page: string) => void }> = ()
     if (!date) return [];
     return sessions.filter((s) => {
       const sessionDate = new Date(s.scheduledAt);
-      return (
-        sessionDate.getDate() === date.getDate() &&
-        sessionDate.getMonth() === date.getMonth() &&
-        sessionDate.getFullYear() === date.getFullYear()
-      );
+      return sessionDate.getDate() === date.getDate() && sessionDate.getMonth() === date.getMonth() && sessionDate.getFullYear() === date.getFullYear();
     });
   };
 
   return (
     <div className="space-y-4 animate-fadeIn">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-black text-gray-800">إدارة الجلسات</h1>
-          <p className="text-gray-400 text-sm">{sessions.length} جلسة مجدولة ومكتملة</p>
+          <p className="text-gray-400 text-sm">{filtered.length} جلسة مجدولة ومكتملة</p>
         </div>
         <div className="flex gap-2">
           <div className="hidden md:flex bg-gray-100 rounded-xl p-1">
-            <button
-              onClick={() => setView('list')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${view === 'list' ? 'bg-white shadow text-[#1B4F72]' : 'text-gray-500'}`}
-            >
-              قائمة
-            </button>
-            <button
-              onClick={() => setView('calendar')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${view === 'calendar' ? 'bg-white shadow text-[#1B4F72]' : 'text-gray-500'}`}
-            >
-              تقويم
-            </button>
+            <button onClick={() => setView('list')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${view === 'list' ? 'bg-white shadow text-[#1B4F72]' : 'text-gray-500'}`}>قائمة</button>
+            <button onClick={() => setView('calendar')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${view === 'calendar' ? 'bg-white shadow text-[#1B4F72]' : 'text-gray-500'}`}>تقويم</button>
           </div>
           <button onClick={() => setShowAddModal(true)} className="btn btn-primary gap-2">
             <Plus size={18} />
@@ -118,17 +127,10 @@ export const SessionsPage: React.FC<{ onNavigate: (page: string) => void }> = ()
         </div>
       </div>
 
-      {/* Status Filter */}
       <div className="flex gap-2 flex-wrap">
         {(['ALL', 'SCHEDULED', 'COMPLETED', 'CANCELLED'] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setStatusFilter(s)}
-            className={`btn btn-sm ${statusFilter === s ? 'btn-primary' : 'btn-ghost'}`}
-          >
-            {s === 'ALL' ? 'الكل' :
-             s === 'SCHEDULED' ? 'مجدولة' :
-             s === 'COMPLETED' ? 'مكتملة' : 'ملغاة'}
+          <button key={s} onClick={() => setStatusFilter(s)} className={`btn btn-sm ${statusFilter === s ? 'btn-primary' : 'btn-ghost'}`}>
+            {s === 'ALL' ? 'الكل' : s === 'SCHEDULED' ? 'مجدولة' : s === 'COMPLETED' ? 'مكتملة' : 'ملغاة'}
             <span className="text-xs opacity-70 mr-1">
               ({s === 'ALL' ? sessions.length : sessions.filter(x => x.status === s).length})
             </span>
@@ -142,7 +144,6 @@ export const SessionsPage: React.FC<{ onNavigate: (page: string) => void }> = ()
         </div>
       ) : (
         <>
-          {/* Calendar View */}
           {view === 'calendar' && (
             <div className="card p-5">
               <div className="flex items-center justify-between mb-4">
@@ -150,13 +151,9 @@ export const SessionsPage: React.FC<{ onNavigate: (page: string) => void }> = ()
                 <h3 className="font-bold text-gray-800">{selectedDate.toLocaleDateString('ar-SA', { year: 'numeric', month: 'long' })}</h3>
                 <button onClick={() => setSelectedDate(new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1))} className="btn btn-ghost btn-sm">►</button>
               </div>
-
               <div className="calendar-grid mb-2">
-                {DAYS_AR.map((day) => (
-                  <div key={day} className="text-center text-xs font-bold text-gray-400 py-2">{day.slice(0, 3)}</div>
-                ))}
+                {DAYS_AR.map((day) => <div key={day} className="text-center text-xs font-bold text-gray-400 py-2">{day.slice(0, 3)}</div>)}
               </div>
-
               <div className="calendar-grid">
                 {daysInMonth.map((date, idx) => {
                   if (!date) return <div key={`empty-${idx}`} />;
@@ -179,9 +176,26 @@ export const SessionsPage: React.FC<{ onNavigate: (page: string) => void }> = ()
             </div>
           )}
 
-          {/* List View */}
           {view === 'list' && (
              <div className="card overflow-hidden">
+               {/* شريط فلترة التواريخ للإدارة */}
+               <div className="bg-gray-50 border-b border-gray-100 p-4 flex flex-wrap items-center justify-between gap-4">
+                 <div className="flex flex-wrap items-center gap-4">
+                   <div className="flex items-center gap-2">
+                     <label className="text-sm font-bold text-gray-700">من:</label>
+                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="form-input text-sm py-1.5" />
+                   </div>
+                   <div className="flex items-center gap-2">
+                     <label className="text-sm font-bold text-gray-700">إلى:</label>
+                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="form-input text-sm py-1.5" />
+                   </div>
+                 </div>
+                 <div className="flex gap-2">
+                   <button onClick={() => { setDateFrom(todayStr); setDateTo(todayStr); }} className="btn btn-sm btn-outline border-blue-200 text-[#1B4F72] hover:bg-blue-50">اليوم فقط</button>
+                   <button onClick={() => { setDateFrom(''); setDateTo(''); }} className="btn btn-sm btn-ghost text-gray-500">عرض الكل</button>
+                 </div>
+               </div>
+
                <div className="divide-y divide-gray-50">
                  {filtered.length === 0 ? (
                    <div className="text-center py-16 text-gray-400">
@@ -190,7 +204,7 @@ export const SessionsPage: React.FC<{ onNavigate: (page: string) => void }> = ()
                    </div>
                  ) : (
                    filtered.map((session) => (
-                     <SessionRow key={session.id} session={session} onDelete={() => handleDeleteSession(session.id)} />
+                     <SessionRow key={session.id} session={session} onDelete={() => handleDeleteSession(session.id)} onRecordAttendance={() => setAttendanceSession(session)} />
                    ))
                  )}
                </div>
@@ -199,15 +213,21 @@ export const SessionsPage: React.FC<{ onNavigate: (page: string) => void }> = ()
         </>
       )}
 
-      {/* Add Session Modal */}
-      {showAddModal && (
-        <AddSessionModal onClose={() => setShowAddModal(false)} onSave={fetchSessions} />
+      {showAddModal && <AddSessionModal onClose={() => setShowAddModal(false)} onSave={fetchData} />}
+      
+      {attendanceSession && (
+        <AttendanceModal 
+          session={attendanceSession} 
+          enrollments={enrollments.filter(e => e.courseId === attendanceSession.courseId)} 
+          onClose={() => setAttendanceSession(null)} 
+          onSave={fetchData} 
+        />
       )}
     </div>
   );
 };
 
-const SessionRow: React.FC<{ session: any, onDelete: () => void }> = ({ session, onDelete }) => {
+const SessionRow: React.FC<{ session: any, onDelete: () => void, onRecordAttendance: () => void }> = ({ session, onDelete, onRecordAttendance }) => {
   const sessionDate = new Date(session.scheduledAt);
   const isToday = sessionDate.toDateString() === new Date().toDateString();
 
@@ -234,25 +254,90 @@ const SessionRow: React.FC<{ session: any, onDelete: () => void }> = ({ session,
         </div>
       </div>
 
-      {session.meetingLink && session.status === 'SCHEDULED' && (
-        <a href={session.meetingLink} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-secondary gap-1 hidden md:flex text-[#1B4F72] bg-blue-50 border-blue-100 hover:bg-blue-100">
-          <Video size={14} /> انضمام
-        </a>
+      {session.status === 'SCHEDULED' && (
+        <div className="flex items-center gap-2 hidden md:flex">
+          {session.meetingLink && (
+            <a href={session.meetingLink} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-outline border-blue-200 text-[#1B4F72] hover:bg-blue-50">
+              <ExternalLink size={14} className="ml-1" /> انضمام
+            </a>
+          )}
+          <button onClick={onRecordAttendance} className="btn btn-sm btn-success">
+            <UserCheck size={14} className="ml-1" /> رصد الحضور
+          </button>
+        </div>
       )}
 
-      <span className={`text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1 ${
-        session.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : 
-        session.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
-      }`}>
-        {session.status === 'COMPLETED' ? <CheckCircle size={12}/> : 
-         session.status === 'CANCELLED' ? <XCircle size={12}/> : <Clock size={12}/>}
+      <span className={`text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1 ${session.status === 'COMPLETED' ? 'bg-green-100 text-green-700' : session.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+        {session.status === 'COMPLETED' ? <CheckCircle size={12}/> : session.status === 'CANCELLED' ? <XCircle size={12}/> : <Clock size={12}/>}
         {session.status === 'COMPLETED' ? 'مكتملة' : session.status === 'CANCELLED' ? 'ملغاة' : 'مجدولة'}
       </span>
 
-      {/* زر الحذف الجديد */}
       <button onClick={onDelete} className="btn btn-icon btn-ghost btn-sm text-red-400 hover:bg-red-50 hover:text-red-600 tooltip" data-tip="حذف الجلسة">
         <Trash2 size={16} />
       </button>
+    </div>
+  );
+};
+
+// ============================================================
+// Attendance Modal Component (للإدارة)
+// ============================================================
+const AttendanceModal: React.FC<{ session: any, enrollments: any[], onClose: () => void, onSave: () => void }> = ({ session, enrollments, onClose, onSave }) => {
+  const [attendance, setAttendance] = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const initialStatus: Record<string, string> = {};
+    enrollments.forEach(e => { initialStatus[e.studentId] = 'PRESENT'; });
+    setAttendance(initialStatus);
+  }, [enrollments]);
+
+  const handleSubmit = async () => {
+    setIsLoading(true);
+    try {
+      const attendancesArray = Object.keys(attendance).map(studentId => ({ studentId, status: attendance[studentId] }));
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
+      const res = await fetch(`${apiUrl}/sessions/${session.id}/attendance`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attendances: attendancesArray })
+      });
+      if (res.ok) { onSave(); onClose(); }
+    } catch (err) { alert('خطأ في رصد الحضور'); }
+    finally { setIsLoading(false); }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="modal animate-slideUp" style={{ maxWidth: 600 }}>
+        <div className="modal-header">
+          <h2 className="text-lg font-bold">رصد الحضور للإدارة</h2>
+          <button onClick={onClose} className="btn btn-icon btn-ghost"><X size={20}/></button>
+        </div>
+        <div className="modal-body space-y-4">
+          <div className="bg-blue-50 p-3 rounded-lg flex items-center justify-between mb-4">
+            <span className="font-bold text-[#1B4F72]">{session.course?.nameAr}</span>
+            <span className="text-sm text-blue-700">{new Date(session.scheduledAt).toLocaleDateString('ar-SA')}</span>
+          </div>
+
+          <div className="space-y-3">
+            {enrollments.length === 0 ? <p className="text-center text-gray-500 py-4">لا يوجد طلاب مسجلين في هذه الدورة للرصد</p> : null}
+            {enrollments.map(e => (
+              <div key={e.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-xl hover:bg-gray-50">
+                <span className="font-semibold text-gray-800">{e.student?.nameAr}</span>
+                <div className="flex gap-2">
+                  <button onClick={() => setAttendance({...attendance, [e.studentId]: 'PRESENT'})} className={`px-3 py-1 text-sm rounded-lg border font-bold transition-colors ${attendance[e.studentId] === 'PRESENT' ? 'bg-green-500 text-white border-green-500' : 'bg-white text-gray-500 border-gray-200'}`}>حاضر</button>
+                  <button onClick={() => setAttendance({...attendance, [e.studentId]: 'LATE'})} className={`px-3 py-1 text-sm rounded-lg border font-bold transition-colors ${attendance[e.studentId] === 'LATE' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-500 border-gray-200'}`}>متأخر</button>
+                  <button onClick={() => setAttendance({...attendance, [e.studentId]: 'ABSENT'})} className={`px-3 py-1 text-sm rounded-lg border font-bold transition-colors ${attendance[e.studentId] === 'ABSENT' ? 'bg-red-500 text-white border-red-500' : 'bg-white text-gray-500 border-gray-200'}`}>غائب</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn btn-ghost">إلغاء</button>
+          <button onClick={handleSubmit} disabled={isLoading || enrollments.length === 0} className="btn btn-primary">{isLoading ? 'جاري الحفظ...' : 'حفظ وإنهاء الجلسة'}</button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -265,9 +350,8 @@ const AddSessionModal: React.FC<{ onClose: () => void, onSave: () => void }> = (
   const [teachers, setTeachers] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // States for Smart Recurring
   const [isRecurring, setIsRecurring] = useState(false);
-  const [selectedDays, setSelectedDays] = useState<number[]>([]); // 0=Sunday, 6=Saturday
+  const [selectedDays, setSelectedDays] = useState<number[]>([]); 
   const [recurrenceType, setRecurrenceType] = useState<'count' | 'date'>('count');
   const [recurrenceCount, setRecurrenceCount] = useState('8');
   const [recurrenceEndDate, setRecurrenceEndDate] = useState('');
@@ -278,13 +362,7 @@ const AddSessionModal: React.FC<{ onClose: () => void, onSave: () => void }> = (
   ];
 
   const [formData, setFormData] = useState({
-    courseId: '',
-    teacherId: '',
-    date: new Date().toISOString().split('T')[0],
-    time: '16:00',
-    durationMinutes: '60',
-    meetingLink: '',
-    notes: ''
+    courseId: '', teacherId: '', date: new Date().toISOString().split('T')[0], time: '16:00', durationMinutes: '60', meetingLink: '', notes: ''
   });
 
   useEffect(() => {
@@ -297,20 +375,15 @@ const AddSessionModal: React.FC<{ onClose: () => void, onSave: () => void }> = (
     fetchData();
   }, []);
 
-  const toggleDay = (dayId: number) => {
-    setSelectedDays(prev => prev.includes(dayId) ? prev.filter(id => id !== dayId) : [...prev, dayId]);
-  };
+  const toggleDay = (dayId: number) => setSelectedDays(prev => prev.includes(dayId) ? prev.filter(id => id !== dayId) : [...prev, dayId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.courseId || !formData.teacherId) return alert('يرجى اختيار الدورة والمعلم');
     
-    // Calculate dates based on recurrence rules
     let datesToSchedule: string[] = [];
-    
     if (isRecurring) {
       if (selectedDays.length === 0) return alert('يرجى تحديد الأيام المطلوبة للتكرار');
-      
       let currentDate = new Date(formData.date);
       let addedCount = 0;
       let limitDate = recurrenceType === 'date' && recurrenceEndDate ? new Date(recurrenceEndDate) : null;
@@ -319,7 +392,6 @@ const AddSessionModal: React.FC<{ onClose: () => void, onSave: () => void }> = (
       for (let i = 0; i < 365; i++) {
         if (recurrenceType === 'count' && addedCount >= maxLimit) break;
         if (recurrenceType === 'date' && limitDate && currentDate > limitDate) break;
-
         if (selectedDays.includes(currentDate.getDay())) {
           const yyyy = currentDate.getFullYear();
           const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
@@ -327,54 +399,35 @@ const AddSessionModal: React.FC<{ onClose: () => void, onSave: () => void }> = (
           datesToSchedule.push(`${yyyy}-${mm}-${dd}`);
           addedCount++;
         }
-        
         currentDate.setDate(currentDate.getDate() + 1);
       }
-      
-      if (datesToSchedule.length === 0) return alert('لم يتم العثور على تواريخ صالحة للجدولة ضمن النطاق المحدد.');
-    } else {
-      datesToSchedule = [formData.date]; 
-    }
+      if (datesToSchedule.length === 0) return alert('لم يتم العثور على تواريخ صالحة للجدولة.');
+    } else { datesToSchedule = [formData.date]; }
 
     setIsLoading(true);
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'https://itqan-lms.vercel.app';
-      
       const promises = datesToSchedule.map(dateStr => {
         const scheduledAt = new Date(`${dateStr}T${formData.time}`).toISOString();
         return fetch(`${apiUrl}/sessions`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            courseId: formData.courseId,
-            teacherId: formData.teacherId,
-            durationMinutes: formData.durationMinutes,
-            meetingLink: formData.meetingLink,
-            notes: formData.notes,
-            scheduledAt
-          })
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...formData, scheduledAt })
         });
       });
-
       await Promise.all(promises);
-      onSave(); 
-      onClose();
-    } catch (err) { 
-      alert('حدث خطأ أثناء جدولة الجلسات'); 
-    } finally { 
-      setIsLoading(false); 
-    }
+      onSave(); onClose();
+    } catch (err) { alert('حدث خطأ أثناء الجدولة'); } 
+    finally { setIsLoading(false); }
   };
 
   return (
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal animate-slideUp" style={{ maxWidth: 650 }}>
         <div className="modal-header">
-          <h2 className="text-lg font-bold">جدولة جلسة للإدارة (فردية أو متكررة)</h2>
+          <h2 className="text-lg font-bold">جدولة جلسة للإدارة</h2>
           <button type="button" onClick={onClose} className="btn btn-icon btn-ghost">✕</button>
         </div>
         <form onSubmit={handleSubmit} className="modal-body space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
-          
           <div className="grid grid-cols-2 gap-4">
             <div className="form-group">
               <label className="form-label required">الدورة / المسار</label>
@@ -394,7 +447,7 @@ const AddSessionModal: React.FC<{ onClose: () => void, onSave: () => void }> = (
 
           <div className="grid grid-cols-3 gap-4">
             <div className="form-group">
-              <label className="form-label required">التاريخ (أو تاريخ البدء)</label>
+              <label className="form-label required">التاريخ</label>
               <input required type="date" className="form-input" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} />
             </div>
             <div className="form-group">
@@ -404,11 +457,7 @@ const AddSessionModal: React.FC<{ onClose: () => void, onSave: () => void }> = (
             <div className="form-group">
               <label className="form-label">المدة (دقيقة)</label>
               <select className="form-input form-select" dir="ltr" value={formData.durationMinutes} onChange={e => setFormData({...formData, durationMinutes: e.target.value})}>
-                <option value="30">30</option>
-                <option value="45">45</option>
-                <option value="60">60</option>
-                <option value="90">90</option>
-                <option value="120">120</option>
+                <option value="30">30</option><option value="45">45</option><option value="60">60</option><option value="90">90</option><option value="120">120</option>
               </select>
             </div>
           </div>
@@ -421,17 +470,10 @@ const AddSessionModal: React.FC<{ onClose: () => void, onSave: () => void }> = (
           <div className={`border-2 rounded-xl transition-all ${isRecurring ? 'border-[#1B4F72] bg-blue-50/30' : 'border-gray-100'}`}>
             <div className="flex items-center justify-between p-4 cursor-pointer" onClick={() => setIsRecurring(!isRecurring)}>
               <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${isRecurring ? 'bg-blue-100 text-[#1B4F72]' : 'bg-gray-100 text-gray-400'}`}>
-                  <RefreshCw size={18} />
-                </div>
-                <div>
-                  <p className="font-bold text-gray-800 text-sm">تكرار الجلسات تلقائياً (Recurring)</p>
-                  <p className="text-xs text-gray-500">قم بجدولة شهر كامل أو عدد محدد بضغطة واحدة</p>
-                </div>
+                <div className={`p-2 rounded-lg ${isRecurring ? 'bg-blue-100 text-[#1B4F72]' : 'bg-gray-100 text-gray-400'}`}><RefreshCw size={18} /></div>
+                <div><p className="font-bold text-gray-800 text-sm">تكرار الجلسات تلقائياً (Recurring)</p><p className="text-xs text-gray-500">جدولة شهر كامل أو عدد محدد بضغطة واحدة</p></div>
               </div>
-              <div className={`w-12 h-6 rounded-full transition-colors relative ${isRecurring ? 'bg-[#1B4F72]' : 'bg-gray-300'}`}>
-                <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${isRecurring ? 'left-1' : 'right-1'}`}></div>
-              </div>
+              <div className={`w-12 h-6 rounded-full transition-colors relative ${isRecurring ? 'bg-[#1B4F72]' : 'bg-gray-300'}`}><div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${isRecurring ? 'left-1' : 'right-1'}`}></div></div>
             </div>
 
             {isRecurring && (
@@ -440,52 +482,28 @@ const AddSessionModal: React.FC<{ onClose: () => void, onSave: () => void }> = (
                   <label className="form-label required">أيام التكرار</label>
                   <div className="flex flex-wrap gap-2">
                     {WEEK_DAYS.map(day => (
-                      <button
-                        type="button"
-                        key={day.id}
-                        onClick={() => toggleDay(day.id)}
-                        className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all ${selectedDays.includes(day.id) ? 'bg-[#1B4F72] text-white border-[#1B4F72]' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}
-                      >
-                        {day.label}
-                      </button>
+                      <button type="button" key={day.id} onClick={() => toggleDay(day.id)} className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all ${selectedDays.includes(day.id) ? 'bg-[#1B4F72] text-white border-[#1B4F72]' : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'}`}>{day.label}</button>
                     ))}
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="form-group flex flex-col justify-center gap-2">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" checked={recurrenceType === 'count'} onChange={() => setRecurrenceType('count')} className="text-[#1B4F72] focus:ring-[#1B4F72]" />
-                      <span className="text-sm font-medium">الانتهاء بعد عدد جلسات</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" checked={recurrenceType === 'date'} onChange={() => setRecurrenceType('date')} className="text-[#1B4F72] focus:ring-[#1B4F72]" />
-                      <span className="text-sm font-medium">الانتهاء في تاريخ محدد</span>
-                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={recurrenceType === 'count'} onChange={() => setRecurrenceType('count')} className="text-[#1B4F72] focus:ring-[#1B4F72]" /><span className="text-sm font-medium">الانتهاء بعد عدد جلسات</span></label>
+                    <label className="flex items-center gap-2 cursor-pointer"><input type="radio" checked={recurrenceType === 'date'} onChange={() => setRecurrenceType('date')} className="text-[#1B4F72] focus:ring-[#1B4F72]" /><span className="text-sm font-medium">الانتهاء في تاريخ محدد</span></label>
                   </div>
-                  
                   <div className="form-group">
                     {recurrenceType === 'count' ? (
-                      <>
-                        <label className="form-label text-xs">إجمالي عدد الجلسات</label>
-                        <input type="number" min="2" max="100" className="form-input" value={recurrenceCount} onChange={e => setRecurrenceCount(e.target.value)} />
-                      </>
+                      <><label className="form-label text-xs">إجمالي الجلسات</label><input type="number" min="2" max="100" className="form-input" value={recurrenceCount} onChange={e => setRecurrenceCount(e.target.value)} /></>
                     ) : (
-                      <>
-                        <label className="form-label text-xs">تاريخ آخر جلسة</label>
-                        <input type="date" className="form-input" value={recurrenceEndDate} onChange={e => setRecurrenceEndDate(e.target.value)} />
-                      </>
+                      <><label className="form-label text-xs">تاريخ آخر جلسة</label><input type="date" className="form-input" value={recurrenceEndDate} onChange={e => setRecurrenceEndDate(e.target.value)} /></>
                     )}
                   </div>
                 </div>
               </div>
             )}
           </div>
-
-          <div className="form-group">
-            <label className="form-label">ملاحظات الإدارة</label>
-            <textarea rows={2} className="form-input resize-none" placeholder="أي ملاحظات خاصة للمدرب..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} />
-          </div>
+          <div className="form-group"><label className="form-label">ملاحظات الإدارة</label><textarea rows={2} className="form-input resize-none" placeholder="أي ملاحظات..." value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} /></div>
         </form>
         <div className="modal-footer pt-2">
           <button type="button" onClick={onClose} disabled={isLoading} className="btn btn-ghost">إلغاء</button>

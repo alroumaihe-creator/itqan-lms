@@ -1,5 +1,5 @@
 // ============================================================
-// STUDENT FORM MODAL - Multi-step Student Registration
+// STUDENT FORM MODAL - Multi-step Student Registration (With Smart Calculator)
 // ============================================================
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -19,6 +19,7 @@ const STEPS = [
   { id: 4, label: 'الاشتراك والدفع', icon: CreditCard },
 ];
 
+// ثوابت الحاسبة الذكية
 const TRACKS = [
   {id:'ihkam', name:'مسار الإحكام', emoji:'🔴', dur:'سنة واحدة', minW:0, maxW:56, allowed:[5,6]},
   {id:'rusoukh',name:'مسار الرُّسُوخ',emoji:'🟠',dur:'سنتان', minW:57, maxW:110, allowed:[4,5,6]},
@@ -40,6 +41,7 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ onClose, onS
   const [realTeachers, setRealTeachers] = useState<any[]>([]);
   const [realCourses, setRealCourses] = useState<any[]>([]);
 
+  // بيانات الطالب
   const [formData, setFormData] = useState({
     id: student?.id || '',
     nameAr: student?.nameAr || '',
@@ -53,11 +55,10 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ onClose, onS
     teacherId: '',
     monthlyFee: '0',
     paymentMethod: 'bank_transfer',
-    notes: student?.notes || '', 
-    // إضافة حقل اتجاه الحفظ
-    memorizationDirection: (student as any)?.memorizationDirection || 'FORWARD',
+    notes: student?.notes || '', // سنحفظ الخطة هنا مؤقتاً
   });
 
+  // بيانات التسكين الذكي
   const [calcData, setCalcData] = useState({
     memPerSession: 0.5,
     daysPerWeek: 5,
@@ -97,6 +98,7 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ onClose, onS
     }));
   };
 
+  // محرك الحساب الآلي
   const planResult = useMemo(() => {
     const weeklyPages = calcData.memPerSession * calcData.daysPerWeek;
     const totalWeeks = Math.ceil(604 / weeklyPages);
@@ -114,6 +116,7 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ onClose, onS
     return { totalWeeks, totalMonths, track, isValid, price, pkg: PKGS[calcData.daysPerWeek] };
   }, [calcData, formData.nationality]);
 
+  // تحديث السعر والملاحظات بناءً على الخطة
   useEffect(() => {
     if (planResult.isValid) {
       const planText = `الخطة الآلية: ${planResult.track.name} | باقة ${planResult.pkg} | الختم المتوقع خلال ${planResult.totalMonths} شهراً.`;
@@ -150,24 +153,16 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ onClose, onS
       const url = isEditing ? `${apiUrl}/students/${formData.id}` : `${apiUrl}/students`;
       const method = isEditing ? 'PUT' : 'POST';
 
-      const payload = {
-        ...formData,
-        targetTrack: planResult.track.name,
-        targetPackage: planResult.pkg,
-        memPerSession: calcData.memPerSession,
-        daysPerWeek: calcData.daysPerWeek,
-        expectedMonths: planResult.totalMonths
-      };
-
       const studentResponse = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(formData),
       });
 
       if (!studentResponse.ok) throw new Error('فشل حفظ الطالب');
       const savedStudent = await studentResponse.json();
 
+      // إنشاء الاشتراك لو اخترنا دورات يدوياً (مؤقتاً لحين ربط الدورة تلقائياً بالمسار)
       if (formData.selectedCourses.length > 0) {
         for (const courseId of formData.selectedCourses) {
           await fetch(`${apiUrl}/enrollments`, {
@@ -211,7 +206,10 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ onClose, onS
               return (
                 <React.Fragment key={s.id}>
                   <div className="step">
-                    <div className={`step-circle cursor-pointer ${isDone ? 'done' : isActive ? 'active' : 'pending'}`} onClick={() => isDone && setStep(s.id)}>
+                    <div
+                      className={`step-circle cursor-pointer ${isDone ? 'done' : isActive ? 'active' : 'pending'}`}
+                      onClick={() => isDone && setStep(s.id)}
+                    >
                       {isDone ? <Check size={16} /> : <StepIcon size={16} />}
                     </div>
                   </div>
@@ -229,7 +227,7 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ onClose, onS
           </div>
         </div>
 
-        <div className="modal-body max-h-[60vh] overflow-y-auto">
+        <div className="modal-body">
           {/* Step 1: Personal Info */}
           {step === 1 && (
             <div className="space-y-4 animate-fadeIn">
@@ -290,20 +288,6 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ onClose, onS
                 <p className="text-xs text-white/80">سيتم حساب المسار والمدة والسعر تلقائياً بناءً على المدخلات.</p>
               </div>
 
-              <div className="form-group border border-gray-100 p-3 rounded-xl bg-gray-50">
-                <label className="form-label font-bold text-[#1B4F72] mb-2">اتجاه الحفظ</label>
-                <div className="flex gap-6">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" checked={formData.memorizationDirection === 'FORWARD'} onChange={() => updateField('memorizationDirection', 'FORWARD')} className="text-[#1B4F72] focus:ring-[#1B4F72] w-4 h-4" />
-                    <span className="text-sm font-medium text-gray-700">من الفاتحة إلى الناس (مسار أمامي)</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" checked={formData.memorizationDirection === 'REVERSE'} onChange={() => updateField('memorizationDirection', 'REVERSE')} className="text-[#1B4F72] focus:ring-[#1B4F72] w-4 h-4" />
-                    <span className="text-sm font-medium text-gray-700">من الناس إلى الفاتحة (مسار عكسي)</span>
-                  </label>
-                </div>
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="form-group">
                   <label className="form-label">مقدار الحفظ لكل حصة</label>
@@ -326,7 +310,11 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ onClose, onS
                 <label className="form-label required">تحديد الأيام</label>
                 <div className="flex flex-wrap gap-2">
                   {[{id:0,l:'الأحد'},{id:1,l:'الإثنين'},{id:2,l:'الثلاثاء'},{id:3,l:'الأربعاء'},{id:4,l:'الخميس'},{id:5,l:'الجمعة'},{id:6,l:'السبت'}].map(day => (
-                    <button key={day.id} type="button" onClick={() => toggleDay(day.id)} className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all ${calcData.selectedDays.includes(day.id) ? 'bg-[#F39C12] text-white border-[#F39C12]' : 'bg-white text-gray-500 border-gray-200'}`}>
+                    <button
+                      key={day.id} type="button"
+                      onClick={() => toggleDay(day.id)}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg border-2 transition-all ${calcData.selectedDays.includes(day.id) ? 'bg-[#F39C12] text-white border-[#F39C12]' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
+                    >
                       {day.l}
                     </button>
                   ))}
@@ -334,6 +322,7 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ onClose, onS
                 {errors.days && <p className="form-error mt-1">{errors.days}</p>}
               </div>
 
+              {/* النتيجة الآلية */}
               <div className={`p-4 rounded-xl border-2 ${planResult.isValid ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                 {planResult.isValid ? (
                   <>
@@ -368,12 +357,6 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ onClose, onS
                     <span className="text-gray-500">المسار المعتمد</span>
                     <span className="font-semibold">{planResult.track.name} - باقة {planResult.pkg}</span>
                   </div>
-                  <div className="flex justify-between border-b border-gray-200 pb-2">
-                    <span className="text-gray-500">اتجاه الحفظ</span>
-                    <span className="font-semibold text-[#1B4F72]">
-                      {formData.memorizationDirection === 'REVERSE' ? 'من الناس إلى الفاتحة' : 'من الفاتحة إلى الناس'}
-                    </span>
-                  </div>
                   <div className="flex justify-between pt-1">
                     <span className="text-gray-800 font-bold">الإجمالي الشهري</span>
                     <span className="font-black text-[#1B4F72]">{formData.monthlyFee} {formData.nationality === 'EG'?'ج.م':formData.nationality==='SA'?'ر.س':'$'}</span>
@@ -394,19 +377,22 @@ export const StudentFormModal: React.FC<StudentFormModalProps> = ({ onClose, onS
           )}
         </div>
 
+        {/* Footer */}
         <div className="modal-footer">
           <button onClick={onClose} disabled={isLoading} className="btn btn-ghost">إلغاء</button>
+          
           {step > 1 && (
-            <button type="button" onClick={() => setStep((s) => s - 1)} disabled={isLoading} className="btn btn-outline gap-1">
+            <button onClick={() => setStep((s) => s - 1)} disabled={isLoading} className="btn btn-outline gap-1">
               <ChevronLeft size={16} /> السابق
             </button>
           )}
+          
           {step < STEPS.length ? (
-            <button type="button" onClick={handleNext} className="btn btn-primary gap-1">
+            <button onClick={handleNext} className="btn btn-primary gap-1">
               التالي <ChevronLeft size={16} className="rotate-180" />
             </button>
           ) : (
-            <button type="button" onClick={handleSubmit} disabled={isLoading || !planResult.isValid} className="btn btn-success gap-1">
+            <button onClick={handleSubmit} disabled={isLoading || !planResult.isValid} className="btn btn-success gap-1">
               {isLoading ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Check size={16} />}
               حفظ وإنشاء الاشتراك
             </button>
